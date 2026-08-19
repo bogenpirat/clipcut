@@ -163,19 +163,6 @@ where
     })
 }
 
-/// Run a scan on a background thread and deliver the result to `sink`.
-///
-/// Large trees on slow disks must not block the UI.
-pub fn scan_async<F>(root: PathBuf, sink: F)
-where
-    F: FnOnce(Vec<VideoFile>) + Send + 'static,
-{
-    std::thread::Builder::new()
-        .name("library-scan".into())
-        .spawn(move || sink(scan(&root)))
-        .expect("spawn library scan");
-}
-
 /// A channel-based scan trigger that coalesces rapid requests.
 ///
 /// The watcher can fire while a scan is already running; this makes sure only
@@ -210,7 +197,6 @@ impl ScanQueue {
         let _ = self.tx.send(root);
     }
 
-    /// A `Send` trigger, for handing to the filesystem watcher.
     pub fn handle(&self) -> ScanHandle {
         ScanHandle {
             tx: self.tx.clone(),

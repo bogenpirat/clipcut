@@ -1,10 +1,4 @@
 //! Locating ffmpeg and asking ffprobe about a file.
-//!
-//! The load-bearing question here is *where a stream copy will actually start*.
-//! `ffmpeg -ss ... -c copy` cannot begin mid-GOP, so it snaps back to the nearest
-//! preceding keyframe — often seconds earlier than the mark. Showing that plainly
-//! is the difference between a predictable tool and one that quietly hands you a
-//! clip with several unwanted seconds on the front.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -13,13 +7,11 @@ use std::sync::mpsc;
 
 use anyhow::{Context, Result, anyhow};
 
-/// How far back to look for a keyframe. Recordings rarely exceed a 10 s GOP;
-/// 60 s is generous without making the probe expensive.
+/// Generous next to a typical 10 s GOP, without making the probe expensive.
 const LOOKBACK_SECONDS: f64 = 60.0;
 /// A little lookahead, so a mark sitting exactly on a keyframe is recognised.
 const LOOKAHEAD_SECONDS: f64 = 2.0;
 
-/// The ffmpeg/ffprobe pair to use.
 #[derive(Debug, Clone)]
 pub struct Tools {
     pub ffmpeg: PathBuf,
@@ -28,9 +20,6 @@ pub struct Tools {
 
 impl Tools {
     /// Resolve the tools, preferring an explicit path over `PATH`.
-    ///
-    /// `override_path` may name either the ffmpeg binary itself or the directory
-    /// containing it, since both are things a user might reasonably enter.
     pub fn discover(override_path: Option<&Path>) -> Result<Self> {
         if let Some(p) = override_path {
             let dir = if p.is_dir() {
@@ -57,8 +46,7 @@ impl Tools {
         })
     }
 
-    /// Encoder names this build supports, for greying out unavailable choices
-    /// instead of failing at export time.
+    /// What the build was compiled with. See [`Self::can_encode`] for usability.
     pub fn encoders(&self) -> HashSet<String> {
         let Ok(out) = Command::new(&self.ffmpeg)
             .args(["-hide_banner", "-loglevel", "error", "-encoders"])
@@ -76,8 +64,6 @@ impl Tools {
     /// supports the codec — a full ffmpeg build on an AMD machine still lists
     /// `h264_nvenc`, and only fails when you try to use it. The sole reliable
     /// test is to encode a frame and see whether it works.
-    ///
-    /// Costs one short ffmpeg run, so call it off the UI thread.
     pub fn can_encode(&self, encoder: &str) -> bool {
         Command::new(&self.ffmpeg)
             .args([
@@ -102,10 +88,6 @@ impl Tools {
     }
 
     /// Filter `candidates` down to the encoders this machine can really use.
-    ///
-    /// Skips the encode test for anything the build does not contain at all,
-    /// so the common case costs one `-encoders` call plus a probe per plausible
-    /// hardware encoder.
     pub fn usable_encoders<'a>(&self, candidates: &[&'a str]) -> HashSet<&'a str> {
         let built_in = self.encoders();
         candidates
@@ -205,11 +187,6 @@ pub fn snap_target(keyframes: &[f64], mark: f64) -> Option<f64> {
     keyframes.iter().copied().rfind(|k| *k <= mark + 1e-6)
 }
 
-// ---------------------------------------------------------------------------
-// Background probing
-// ---------------------------------------------------------------------------
-
-/// Result of a keyframe probe: the mark asked about, and where a copy would start.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SnapResult {
     pub file: PathBuf,

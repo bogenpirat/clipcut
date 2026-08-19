@@ -3,19 +3,12 @@
 //! Pure: no I/O, no process spawning. Every export the app performs is
 //! reproducible by pasting the produced argv into a terminal.
 //!
-//! Modelled on the reference command this tool was built to replace:
-//!
-//! ```text
-//! ffmpeg -ss $Start -i "$File" -c:v $Vcodec -t $Duration -crf $CRF -y foo.mp4
-//! ```
-//!
 //! `-ss` before `-i` performs a fast input seek. When re-encoding, ffmpeg still
 //! decodes and discards up to the exact frame, so the cut is frame-accurate *and*
 //! fast. `-t` after `-i` is an output option and is unambiguous across versions.
 
 use std::path::{Path, PathBuf};
 
-/// How the clip is produced.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum CutMode {
     /// Stream copy. Instant and lossless, but the start snaps back to the
@@ -77,7 +70,6 @@ impl VideoEncoder {
     }
 }
 
-/// Encoder-neutral speed/quality tradeoff, mapped per encoder.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Speed {
     Fastest,
@@ -184,12 +176,10 @@ pub struct ExportRequest {
 /// Seconds as `HH:MM:SS.mmm` — see [`crate::timecode`] for why not a bare float.
 pub use crate::timecode::ffmpeg_timestamp as format_timestamp;
 
-/// Build the full argument vector, excluding the ffmpeg executable itself.
 pub fn build_args(req: &ExportRequest) -> Vec<String> {
     let s = &req.settings;
     let mut a: Vec<String> = Vec::new();
 
-    /// Appends each argument, stringified.
     macro_rules! push {
         ($($v:expr),+ $(,)?) => {{ $( a.push($v.to_string()); )+ }};
     }

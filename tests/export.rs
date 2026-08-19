@@ -110,7 +110,6 @@ fn duration_of(path: &Path) -> f64 {
         .unwrap_or(-1.0)
 }
 
-/// Run an export, returning the progress snapshots parsed from real ffmpeg output.
 fn run_export(req: &ExportRequest) -> Vec<clipcut::encode::Progress> {
     let args = build_args(req);
     let rendered = display_command(Path::new("ffmpeg"), &args);

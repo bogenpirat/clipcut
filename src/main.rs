@@ -27,7 +27,6 @@ use render::VideoBridge;
 
 slint::include_modules!();
 
-/// Option lists shown in the encoding panel, paired with the values they map to.
 const ENCODERS: [(&str, VideoEncoder); 4] = [
     ("H.264 (x264, software)", VideoEncoder::X264),
     ("H.264 (NVENC)", VideoEncoder::NvencH264),
@@ -52,9 +51,6 @@ const AUDIO_MODES: [(&str, AudioHandling); 3] = [
     ("Copy original", AudioHandling::Copy),
 ];
 
-/// Convert a scanned file into a row for the list.
-///
-/// All formatting happens here so the UI never has to know about timestamps.
 fn to_entry(file: &VideoFile) -> FileEntry {
     FileEntry {
         display_name: file.display_name.as_str().into(),
@@ -83,14 +79,12 @@ struct App {
     /// The file list itself lives in the Slint model, which already carries the
     /// path of each row, so there is no second copy to keep in sync.
     watcher: Option<LibraryWatcher>,
-    /// The file currently loaded in the player.
     current: Option<PathBuf>,
     /// Marks per file, so switching away and back does not lose work.
     /// Deliberately not persisted: marks belong to an editing session.
     marks: HashMap<PathBuf, Marks>,
     /// The export in flight, if any. Held so it can be cancelled.
     export: Option<ExportHandle>,
-    /// True while the timeline is zoomed into the selection.
     refining: bool,
 }
 
@@ -129,7 +123,6 @@ fn main() -> Result<()> {
 
     let ui = AppWindow::new()?;
 
-    // Restore persisted state before anything can overwrite it.
     {
         let st = app_state.borrow();
         ui.set_volume(st.settings.volume as f32);
@@ -270,7 +263,6 @@ fn main() -> Result<()> {
         }))
     });
 
-    // Ask for a snap position, or clear it when the question does not apply.
     let refresh_snap = {
         let state = app_state.clone();
         let weak = ui.as_weak();
@@ -342,7 +334,6 @@ fn main() -> Result<()> {
                 }
             }
 
-            // Capture the composited window, which is what the user sees.
             RenderingState::AfterRendering => {
                 if let (Some(b), Some(ui)) = (bridge.as_ref(), weak.upgrade()) {
                     maybe_dump_window(b, &ui);
@@ -410,7 +401,6 @@ fn main() -> Result<()> {
         }
     }));
 
-    // Point the app at a folder: persist it, scan it, and watch it.
     let use_folder = {
         let state = app_state.clone();
         let queue = scan_queue.clone();
@@ -972,7 +962,6 @@ fn main() -> Result<()> {
         }
     );
 
-    // Scan the remembered folder on startup.
     // The clone is bound first so the shared borrow ends before `use_folder`
     // takes a mutable one.
     let startup_folder = app_state.borrow().settings.input_folder.clone();
@@ -1047,7 +1036,6 @@ fn main() -> Result<()> {
     result.map_err(Into::into)
 }
 
-/// Marks for whichever file is loaded, or empty marks if none is.
 fn current_marks(state: &Rc<RefCell<App>>) -> Marks {
     let st = state.borrow();
     st.current
@@ -1138,7 +1126,6 @@ fn refresh_encoder_warning(ui: &AppWindow) {
     });
 }
 
-/// Push encoding settings into the UI, including the derived labels.
 fn sync_encoding_to_ui(ui: &AppWindow, settings: &Settings) {
     let e = &settings.encoding;
     let precise = e.mode == CutMode::Precise;

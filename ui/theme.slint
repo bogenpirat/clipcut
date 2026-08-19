@@ -63,10 +63,6 @@ export global Theme {
     out property <duration> anim: 120ms;
 }
 
-// ---------------------------------------------------------------------------
-// Shared primitives
-// ---------------------------------------------------------------------------
-
 export component Btn inherits Rectangle {
     in property <string> text;
     in property <bool> primary: false;
@@ -107,7 +103,6 @@ export component Btn inherits Rectangle {
     }
 }
 
-/// Square icon button, for transport controls.
 export component IconBtn inherits Rectangle {
     in property <string> glyph;
     in property <bool> active: false;
@@ -141,7 +136,6 @@ export component IconBtn inherits Rectangle {
     }
 }
 
-/// A collapsible section with a disclosure header.
 export component Section inherits Rectangle {
     in property <string> title;
     in property <string> summary;

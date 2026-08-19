@@ -10,7 +10,6 @@ use anyhow::{Result, anyhow};
 use libmpv2::events::{Event, PropertyData};
 use libmpv2::{Format, Mpv};
 
-/// Reply IDs for observed properties.
 const ID_TIME_POS: u64 = 1;
 const ID_DURATION: u64 = 2;
 const ID_PAUSE: u64 = 3;
@@ -43,7 +42,6 @@ impl Player {
             // vo=libmpv is what enables the render API.
             init.set_property("vo", "libmpv")?;
             init.set_property("hwdec", hwdec)?;
-            // Frame-exact seeking: the whole point of the tool.
             init.set_property("hr-seek", "yes")?;
             // Hold the last frame instead of closing the file at EOF.
             init.set_property("keep-open", "yes")?;
@@ -64,7 +62,6 @@ impl Player {
         })
     }
 
-    /// The raw handle, needed to create the render context.
     pub fn mpv(&self) -> &'static Mpv {
         self.mpv
     }
@@ -80,14 +77,12 @@ impl Player {
             .map_err(|e| anyhow!("could not load {}: {e:?}", path.display()))
     }
 
-    /// Seek to an absolute position, landing on the exact frame.
     pub fn seek(&self, seconds: f64) {
         let _ = self
             .mpv
             .command("seek", &[&format!("{seconds:.4}"), "absolute+exact"]);
     }
 
-    /// Step one frame forward (`dir >= 0`) or back.
     pub fn frame_step(&self, dir: i32) {
         let cmd = if dir < 0 {
             "frame-back-step"

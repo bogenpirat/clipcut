@@ -5,9 +5,6 @@
 //! period) with a **maximum delay** so a long drag still checkpoints, and are
 //! **atomic** (write to a temp file, then rename) so a crash mid-write cannot
 //! leave a truncated config behind.
-//!
-//! A missing or corrupt file falls back to defaults rather than refusing to start:
-//! losing preferences is annoying, failing to launch is not acceptable.
 
 use std::fs;
 use std::io;
@@ -20,7 +17,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::encode::EncodeSettings;
 
-/// Quiet period before a write.
 const DEBOUNCE: Duration = Duration::from_millis(400);
 /// Longest a change may sit unwritten while updates keep arriving.
 const MAX_DELAY: Duration = Duration::from_secs(2);
@@ -54,7 +50,6 @@ impl WindowState {
     ///
     /// A monitor that has been unplugged since the last run would otherwise put
     /// the window somewhere unreachable, so absurd coordinates are discarded.
-    /// This cannot detect every case, but it catches the common one.
     pub fn usable_position(&self) -> Option<(i32, i32)> {
         let (x, y) = (self.x?, self.y?);
         (x > -32_000 && x < 32_000 && y > -32_000 && y < 32_000).then_some((x, y))
@@ -113,7 +108,6 @@ pub fn default_path() -> Option<PathBuf> {
     directories::ProjectDirs::from("", "", "clipcut").map(|d| d.config_dir().join("config.toml"))
 }
 
-/// Read settings, falling back to defaults for anything missing or malformed.
 pub fn load_from(path: &Path) -> Settings {
     let Ok(text) = fs::read_to_string(path) else {
         return Settings::default();
@@ -154,7 +148,6 @@ pub struct ConfigStore {
 }
 
 impl ConfigStore {
-    /// Load the settings at `path` and start a writer for it.
     pub fn open_at(path: PathBuf) -> (Settings, Self) {
         Self::open_with(path, DEBOUNCE, MAX_DELAY)
     }

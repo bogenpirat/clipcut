@@ -7,8 +7,6 @@
 //! mpv renders into an FBO-backed texture that we wrap with
 //! [`slint::BorrowedOpenGLTextureBuilder`] and hand to Slint as an ordinary
 //! `image` property — so Slint does layout, clipping and overlays natively.
-//! (The alternative, mpv's own child window via `--wid`, always paints above the
-//! UI and cannot be composited with it.)
 
 use std::cell::Cell;
 use std::ffi::{CStr, CString, c_void};
@@ -20,7 +18,6 @@ use libmpv2::Mpv;
 use libmpv2::render::{OpenGLInitParams, RenderContext, RenderParam, RenderParamApiType};
 use slint::{BorrowedOpenGLTextureBuilder, BorrowedOpenGLTextureOrigin, GraphicsAPI};
 
-/// The loader Slint lends us to resolve OpenGL entry points.
 type GlLoader = dyn Fn(&CStr) -> *const c_void;
 
 /// Context passed to mpv for resolving GL function pointers.
@@ -245,7 +242,6 @@ fn set_enabled(gl: &glow::Context, cap: u32, enabled: bool) {
     }
 }
 
-/// The offscreen surface mpv draws into.
 struct Target {
     fbo: glow::NativeFramebuffer,
     tex: glow::NativeTexture,
@@ -287,7 +283,6 @@ impl VideoBridge {
         })
     }
 
-    /// Ask to be woken when mpv has a new frame.
     pub fn on_new_frame<F: Fn() + Send + 'static>(&mut self, callback: F) {
         self.render.set_update_callback(callback);
     }

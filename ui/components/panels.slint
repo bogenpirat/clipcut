@@ -38,8 +38,6 @@ export component EncodingPanel inherits Section {
     property <length> control-h: 26px;
 
     // ---- row 1: cut mode + container ----------------------------------
-    // The mode buttons name their own tradeoff, and Fast mode already reports
-    // its keyframe snap under the timeline, so no explanatory paragraph here.
     HorizontalLayout {
         spacing: Theme.sp-3;
 
@@ -64,7 +62,6 @@ export component EncodingPanel inherits Section {
                 }
             }
         }
-
 
         Inline {
             label: "Container";

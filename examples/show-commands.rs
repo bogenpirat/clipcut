@@ -1,8 +1,5 @@
 //! Prints the ffmpeg commands ClipCut would run, for eyeballing and debugging.
 //!
-//! ```text
-//! cargo run --example show-commands
-//! ```
 
 use std::path::{Path, PathBuf};
 

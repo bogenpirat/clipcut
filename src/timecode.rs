@@ -1,13 +1,4 @@
 //! Timecode formatting and parsing.
-//!
-//! Two audiences with different needs:
-//!
-//! - **ffmpeg** wants `HH:MM:SS.mmm`, always fully qualified.
-//! - **The UI** wants the shortest unambiguous form, so a 40-second clip reads
-//!   `0:40` rather than `00:00:40.000`.
-//!
-//! Everything here is locale-independent. Formatting via a decimal float would
-//! be a latent bug on systems where the separator is a comma.
 
 /// `HH:MM:SS.mmm` — the form ffmpeg accepts unambiguously.
 pub fn ffmpeg_timestamp(seconds: f64) -> String {

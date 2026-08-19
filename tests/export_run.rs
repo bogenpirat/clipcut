@@ -95,7 +95,6 @@ fn request(output: PathBuf, duration: f64, speed: Speed) -> ExportRequest {
     }
 }
 
-/// Collect events until a terminal one arrives.
 fn run_to_completion(
     tools: &Tools,
     req: ExportRequest,

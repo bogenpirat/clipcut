@@ -18,7 +18,6 @@ use anyhow::{Context, Result};
 use crate::encode::{ExportRequest, Progress, ProgressParser, build_args, display_command};
 use crate::media::Tools;
 
-/// How much of ffmpeg's stderr to keep for error reporting.
 const STDERR_TAIL_LINES: usize = 40;
 
 #[derive(Debug, Clone)]
@@ -29,7 +28,6 @@ pub enum ExportEvent {
     Cancelled,
 }
 
-/// Controls a running export.
 pub struct ExportHandle {
     child: Arc<Mutex<Option<Child>>>,
     cancelled: Arc<AtomicBool>,
@@ -205,7 +203,6 @@ pub fn unique_output_path(dir: &Path, stem: &str, ext: &str) -> PathBuf {
     dir.join(format!("{root}_{}.{ext}", std::process::id()))
 }
 
-/// Split a trailing `_NNN` counter off a stem.
 fn split_counter(stem: &str) -> (String, u32) {
     if let Some((root, digits)) = stem.rsplit_once('_')
         && !digits.is_empty()
