@@ -1,0 +1,261 @@
+// Design tokens. Every colour, size and radius in the app comes from here, so
+// the look can be changed in one place rather than hunted through components.
+
+export global Theme {
+    // ---- surfaces, darkest to lightest -----------------------------------
+    out property <brush> bg-base: #0c0e11;      // window background
+    out property <brush> bg-panel: #12151a;     // side panel, sections
+    out property <brush> bg-raised: #191d24;    // cards, inputs
+    out property <brush> bg-hover: #212630;
+    out property <brush> bg-active: #2a303b;
+    out property <brush> bg-video: #000000;     // letterbox area
+
+    out property <brush> border: #232830;
+    out property <brush> border-strong: #333a45;
+
+    // ---- text -------------------------------------------------------------
+    out property <brush> text: #e7eaef;
+    out property <brush> text-dim: #98a1af;
+    out property <brush> text-faint: #656d7a;
+    out property <brush> text-on-accent: #08111f;
+
+    // ---- accents ----------------------------------------------------------
+    out property <brush> accent: #4c9aff;
+    out property <brush> accent-hover: #6aabff;
+    out property <brush> accent-dim: #1e3a5f;
+
+    // In/out marks read as a matched pair: green opens, amber closes.
+    out property <brush> mark-in: #3ddc97;
+    out property <brush> mark-out: #ffb454;
+    // Where a stream copy will actually land, versus where the mark was placed.
+    out property <brush> mark-ghost: #6b7482;
+
+    out property <brush> danger: #ff6b6b;
+    out property <brush> success: #3ddc97;
+
+    // ---- spacing scale ----------------------------------------------------
+    out property <length> sp-1: 4px;
+    out property <length> sp-2: 8px;
+    out property <length> sp-3: 12px;
+    out property <length> sp-4: 16px;
+    out property <length> sp-5: 24px;
+    out property <length> sp-6: 32px;
+
+    // ---- radii ------------------------------------------------------------
+    out property <length> r-sm: 4px;
+    out property <length> r-md: 6px;
+    out property <length> r-lg: 10px;
+
+    // ---- type -------------------------------------------------------------
+    out property <length> fs-xs: 11px;
+    out property <length> fs-sm: 12px;
+    out property <length> fs-md: 13px;
+    out property <length> fs-lg: 15px;
+    out property <length> fs-xl: 18px;
+
+    out property <int> fw-normal: 400;
+    out property <int> fw-medium: 500;
+    out property <int> fw-bold: 600;
+
+    // Timecodes must not jitter as digits change.
+    out property <string> font-mono: "Consolas";
+
+    out property <duration> anim: 120ms;
+}
+
+// ---------------------------------------------------------------------------
+// Shared primitives
+// ---------------------------------------------------------------------------
+
+export component Btn inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary: false;
+    in property <bool> enabled: true;
+    in property <length> pad-h: Theme.sp-3;
+    callback clicked();
+
+    horizontal-stretch: 0;
+    height: 26px;
+    min-width: label.preferred-width + root.pad-h * 2;
+    border-radius: Theme.r-sm;
+    background: !root.enabled ? Theme.bg-raised
+        : root.primary ? (touch.has-hover ? Theme.accent-hover : Theme.accent)
+        : (touch.has-hover ? Theme.bg-hover : Theme.bg-raised);
+    border-width: root.primary ? 0px : 1px;
+    border-color: Theme.border;
+    animate background { duration: Theme.anim; }
+
+    label := Text {
+        x: root.pad-h;
+        width: parent.width - root.pad-h * 2;
+        height: 100%;
+        text: root.text;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        font-size: Theme.fs-md;
+        font-weight: root.primary ? Theme.fw-medium : Theme.fw-normal;
+        color: !root.enabled ? Theme.text-faint
+            : root.primary ? Theme.text-on-accent : Theme.text;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+/// Square icon button, for transport controls.
+export component IconBtn inherits Rectangle {
+    in property <string> glyph;
+    in property <bool> active: false;
+    in property <bool> enabled: true;
+    in property <length> size: 28px;
+    callback clicked();
+
+    width: root.size;
+    height: root.size;
+    border-radius: Theme.r-sm;
+    background: touch.has-hover && root.enabled ? Theme.bg-hover : transparent;
+    animate background { duration: Theme.anim; }
+
+    Text {
+        width: 100%;
+        height: 100%;
+        text: root.glyph;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        font-size: Theme.fs-lg;
+        color: !root.enabled ? Theme.text-faint
+            : root.active ? Theme.accent : Theme.text;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+/// A collapsible section with a disclosure header.
+export component Section inherits Rectangle {
+    in property <string> title;
+    in property <string> summary;
+    in-out property <bool> expanded: false;
+    callback toggled(bool);
+
+    background: Theme.bg-panel;
+    border-radius: Theme.r-md;
+    border-width: 1px;
+    border-color: Theme.border;
+
+    VerticalLayout {
+        header := Rectangle {
+            height: 30px;
+            background: head-touch.has-hover ? Theme.bg-hover : transparent;
+            border-radius: Theme.r-md;
+            animate background { duration: Theme.anim; }
+
+            HorizontalLayout {
+                padding-left: Theme.sp-3;
+                padding-right: Theme.sp-3;
+                spacing: Theme.sp-2;
+
+                Text {
+                    text: root.expanded ? "▾" : "▸";
+                    vertical-alignment: center;
+                    font-size: Theme.fs-sm;
+                    color: Theme.text-dim;
+                    width: 12px;
+                }
+
+                Text {
+                    text: root.title;
+                    vertical-alignment: center;
+                    font-size: Theme.fs-md;
+                    font-weight: Theme.fw-medium;
+                    color: Theme.text;
+                }
+
+                Rectangle { }
+
+                Text {
+                    text: root.summary;
+                    vertical-alignment: center;
+                    font-size: Theme.fs-sm;
+                    color: Theme.text-faint;
+                }
+            }
+
+            head-touch := TouchArea {
+                mouse-cursor: MouseCursor.pointer;
+                clicked => {
+                    root.expanded = !root.expanded;
+                    root.toggled(root.expanded);
+                }
+            }
+        }
+
+        if root.expanded: Rectangle {
+            height: 1px;
+            background: Theme.border;
+        }
+
+        // The body is always present — @children may not live inside a
+        // conditional — so collapsing is done by clipping it to zero height.
+        Rectangle {
+            clip: true;
+            height: root.expanded ? body.preferred-height : 0px;
+            animate height { duration: Theme.anim; }
+
+            body := VerticalLayout {
+                width: 100%;
+                y: 0;
+                height: self.preferred-height;
+                padding: Theme.sp-3;
+                padding-top: Theme.sp-2;
+                padding-bottom: Theme.sp-3;
+                spacing: Theme.sp-2;
+                @children
+            }
+        }
+    }
+}
+
+/// Label above a control, for the few places a control needs the full width.
+export component Field inherits VerticalLayout {
+    in property <string> label;
+    spacing: Theme.sp-1;
+
+    Text {
+        text: root.label;
+        font-size: Theme.fs-xs;
+        color: Theme.text-faint;
+    }
+
+    @children
+}
+
+/// Label beside a control rather than above it.
+///
+/// Stacked labels cost a line each, which adds up fast in a panel of eight
+/// fields; inline keeps a whole settings row to one line.
+export component Inline inherits HorizontalLayout {
+    in property <string> label;
+    spacing: Theme.sp-2;
+
+    VerticalLayout {
+        alignment: center;
+        Text {
+            text: root.label;
+            font-size: Theme.fs-xs;
+            color: Theme.text-faint;
+        }
+    }
+
+    @children
+}

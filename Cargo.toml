@@ -1,0 +1,37 @@
+[package]
+name = "clipcut"
+version = "0.1.0"
+edition = "2024"
+description = "A fast video clipping tool: find a cut point, set marks, export a clip"
+readme = "README.md"
+# Not published to crates.io: this is an application, and it needs libmpv fetched
+# by scripts/setup-mpv.ps1 before it will link.
+publish = false
+
+[dependencies]
+anyhow = "1.0.104"
+chrono = "0.4.45"
+directories = "6.0.0"
+glow = "0.18.0"
+libmpv2 = "6"
+notify = "8.2.0"
+notify-debouncer-full = "0.7.0"
+rfd = "0.17.2"
+serde = { version = "1.0.229", features = ["derive"] }
+slint = "1.17.1"
+toml = "1.1.4"
+trash = "5.2.6"
+walkdir = "2.5.0"
+which = "8.0.5"
+
+[build-dependencies]
+slint-build = "1.17.1"
+
+[dev-dependencies]
+filetime = "0.2.29"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true

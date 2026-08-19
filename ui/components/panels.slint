@@ -1,0 +1,383 @@
+import { Theme, Section, Inline, Btn } from "../theme.slint";
+import { ComboBox, LineEdit } from "std-widgets.slint";
+
+// Mirrors clipcut::encode::EncodeSettings. Rust owns the option lists so the
+// encoder choices can be filtered by what the local ffmpeg build supports.
+//
+// Laid out for density: labels sit beside their controls rather than above, and
+// each dropdown is sized to its own longest option instead of splitting the row
+// evenly — "MP4" does not need half the panel.
+export component EncodingPanel inherits Section {
+    in property <[string]> encoders;
+    in property <int> encoder-index;
+    in property <[string]> speeds;
+    in property <int> speed-index;
+    in property <[string]> containers;
+    in property <int> container-index;
+    in property <[string]> audio-modes;
+    in property <int> audio-index;
+    in property <int> quality;
+    in property <string> quality-label;      // "CRF" or "CQ"
+    in property <int> quality-min;
+    in property <int> quality-max;
+    in property <bool> precise;
+    // No video track means every video setting is irrelevant.
+    in property <bool> audio-only: false;
+    // Set when the chosen encoder is missing from the local ffmpeg build.
+    in property <string> warning;
+
+    callback set-mode(bool);
+    callback set-encoder(int);
+    callback set-speed(int);
+    callback set-container(int);
+    callback set-audio(int);
+    callback set-quality(int);
+
+    title: "Encoding";
+
+    property <length> control-h: 26px;
+
+    // ---- row 1: cut mode + container ----------------------------------
+    // The mode buttons name their own tradeoff, and Fast mode already reports
+    // its keyframe snap under the timeline, so no explanatory paragraph here.
+    HorizontalLayout {
+        spacing: Theme.sp-3;
+
+        if !root.audio-only: Inline {
+            label: "Cut";
+            horizontal-stretch: 0;
+            HorizontalLayout {
+                spacing: Theme.sp-1;
+                Btn {
+                    text: "Fast (copy)";
+                    primary: !root.precise;
+                    clicked => {
+                        root.set-mode(false);
+                    }
+                }
+                Btn {
+                    text: "Precise (re-encode)";
+                    primary: root.precise;
+                    clicked => {
+                        root.set-mode(true);
+                    }
+                }
+            }
+        }
+
+
+        Inline {
+            label: "Container";
+            horizontal-stretch: 0;
+            ComboBox {
+                width: 86px;
+                height: root.control-h;
+                model: root.containers;
+                current-index: root.container-index;
+                selected(v) => {
+                    root.set-container(self.current-index);
+                }
+            }
+        }
+
+        Rectangle { }
+    }
+
+    // ---- row 2: encoder + speed + audio --------------------------------
+    if root.precise && !root.audio-only: HorizontalLayout {
+        spacing: Theme.sp-3;
+
+        Inline {
+            label: "Encoder";
+            horizontal-stretch: 0;
+            ComboBox {
+                width: 190px;
+                height: root.control-h;
+                model: root.encoders;
+                current-index: root.encoder-index;
+                selected(v) => {
+                    root.set-encoder(self.current-index);
+                }
+            }
+        }
+
+        Inline {
+            label: "Speed";
+            horizontal-stretch: 0;
+            ComboBox {
+                width: 160px;
+                height: root.control-h;
+                model: root.speeds;
+                current-index: root.speed-index;
+                selected(v) => {
+                    root.set-speed(self.current-index);
+                }
+            }
+        }
+
+        Inline {
+            label: "Audio";
+            horizontal-stretch: 0;
+            ComboBox {
+                width: 130px;
+                height: root.control-h;
+                model: root.audio-modes;
+                current-index: root.audio-index;
+                selected(v) => {
+                    root.set-audio(self.current-index);
+                }
+            }
+        }
+
+        Rectangle { }
+    }
+
+    // ---- row 3: quality -------------------------------------------------
+    if root.precise && !root.audio-only: HorizontalLayout {
+        spacing: Theme.sp-2;
+
+        VerticalLayout {
+            alignment: center;
+            Text {
+                text: root.quality-label;
+                font-size: Theme.fs-xs;
+                color: Theme.text-faint;
+            }
+        }
+
+        Rectangle {
+            height: root.control-h;
+            horizontal-stretch: 1;
+            property <length> track-w: self.width - 8px;
+            property <float> frac: clamp((root.quality - root.quality-min)
+                / max(root.quality-max - root.quality-min, 1), 0, 1);
+
+            Rectangle {
+                x: 4px;
+                y: (parent.height - 4px) / 2;
+                width: parent.track-w;
+                height: 4px;
+                border-radius: 2px;
+                background: Theme.bg-raised;
+            }
+            Rectangle {
+                x: 4px;
+                y: (parent.height - 4px) / 2;
+                width: parent.track-w * parent.frac;
+                height: 4px;
+                border-radius: 2px;
+                background: Theme.accent;
+            }
+            Rectangle {
+                x: 4px + parent.track-w * parent.frac - 6px;
+                y: (parent.height - 12px) / 2;
+                width: 12px;
+                height: 12px;
+                border-radius: 6px;
+                background: Theme.text;
+            }
+
+            q-touch := TouchArea {
+                mouse-cursor: MouseCursor.pointer;
+                moved => {
+                    if (self.pressed) {
+                        root.set-quality(round(root.quality-min
+                            + clamp((self.mouse-x - 4px) / parent.track-w, 0, 1)
+                            * (root.quality-max - root.quality-min)));
+                    }
+                }
+                pointer-event(ev) => {
+                    if (ev.button == PointerEventButton.left && ev.kind == PointerEventKind.down) {
+                        root.set-quality(round(root.quality-min
+                            + clamp((self.mouse-x - 4px) / parent.track-w, 0, 1)
+                            * (root.quality-max - root.quality-min)));
+                    }
+                }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            Text {
+                width: 22px;
+                text: root.quality;
+                horizontal-alignment: right;
+                font-size: Theme.fs-sm;
+                font-family: Theme.font-mono;
+                color: Theme.text;
+            }
+        }
+    }
+
+    if root.audio-only: Inline {
+        label: "Bitrate";
+        horizontal-stretch: 0;
+        ComboBox {
+            width: 130px;
+            height: root.control-h;
+            model: root.audio-modes;
+            current-index: root.audio-index;
+            selected(v) => {
+                root.set-audio(self.current-index);
+            }
+        }
+    }
+
+    if root.audio-only: Text {
+        text: "Audio only — the video track is dropped and the audio is encoded to MP3.";
+        font-size: Theme.fs-xs;
+        color: Theme.text-faint;
+    }
+
+    if root.warning != "": Text {
+        text: root.warning;
+        font-size: Theme.fs-xs;
+        color: Theme.danger;
+        wrap: word-wrap;
+    }
+}
+
+export component OutputPanel inherits Section {
+    in property <string> folder;
+    in property <string> filename;
+    in property <string> extension;
+    in property <bool> can-export: false;
+    in property <string> status;
+    in property <bool> exporting: false;
+    in property <float> progress;          // 0-1
+    in property <string> progress-detail;
+
+    callback choose-folder();
+    callback set-filename(string);
+    callback export();
+    callback cancel();
+
+    title: "Output";
+
+    property <length> control-h: 26px;
+
+    // ---- row 1: destination folder ------------------------------------
+    HorizontalLayout {
+        spacing: Theme.sp-2;
+
+        Inline {
+            label: "Folder";
+            horizontal-stretch: 1;
+
+            Rectangle {
+                height: root.control-h;
+                horizontal-stretch: 1;
+                background: Theme.bg-raised;
+                border-radius: Theme.r-sm;
+                border-width: 1px;
+                border-color: Theme.border;
+
+                Text {
+                    x: Theme.sp-2;
+                    width: parent.width - Theme.sp-2 * 2;
+                    height: 100%;
+                    vertical-alignment: center;
+                    text: root.folder == "" ? "Not set" : root.folder;
+                    font-size: Theme.fs-sm;
+                    color: root.folder == "" ? Theme.text-faint : Theme.text-dim;
+                    overflow: elide;
+                }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            Btn {
+                text: "Browse…";
+                clicked => {
+                    root.choose-folder();
+                }
+            }
+        }
+    }
+
+    // ---- row 2: name and the action ------------------------------------
+    HorizontalLayout {
+        spacing: Theme.sp-2;
+
+        Inline {
+            label: "Name";
+            horizontal-stretch: 1;
+
+            LineEdit {
+                height: root.control-h;
+                horizontal-stretch: 1;
+                text: root.filename;
+                edited(v) => {
+                    root.set-filename(v);
+                }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            Text {
+                text: "." + root.extension;
+                font-size: Theme.fs-sm;
+                font-family: Theme.font-mono;
+                color: Theme.text-faint;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            if !root.exporting: Btn {
+                text: "Export clip";
+                primary: true;
+                enabled: root.can-export;
+                clicked => {
+                    root.export();
+                }
+            }
+            if root.exporting: Btn {
+                text: "Cancel";
+                clicked => {
+                    root.cancel();
+                }
+            }
+        }
+    }
+
+    // ---- row 3: progress, or the reason export is unavailable ----------
+    if root.exporting: HorizontalLayout {
+        spacing: Theme.sp-2;
+
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            Rectangle {
+                height: 4px;
+                border-radius: 2px;
+                background: Theme.bg-raised;
+
+                Rectangle {
+                    x: 0;
+                    width: parent.width * clamp(root.progress, 0, 1);
+                    height: 100%;
+                    border-radius: 2px;
+                    background: Theme.accent;
+                    animate width { duration: Theme.anim; }
+                }
+            }
+        }
+
+        Text {
+            vertical-alignment: center;
+            text: root.progress-detail;
+            font-size: Theme.fs-xs;
+            color: Theme.text-dim;
+        }
+    }
+
+    if !root.exporting && root.status != "": Text {
+        text: root.status;
+        font-size: Theme.fs-xs;
+        color: Theme.text-faint;
+        overflow: elide;
+    }
+}

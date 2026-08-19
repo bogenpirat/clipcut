@@ -1,0 +1,411 @@
+import { Theme } from "theme.slint";
+import { FileList, FileEntry } from "components/file_list.slint";
+import { Timeline } from "components/timeline.slint";
+import { Transport } from "components/transport.slint";
+import { EncodingPanel, OutputPanel } from "components/panels.slint";
+import { About } from "components/about.slint";
+
+export { FileEntry }
+
+export component AppWindow inherits Window {
+    title: "ClipCut";
+    min-width: 900px;
+    min-height: 600px;
+    preferred-width: 1280px;
+    preferred-height: 800px;
+    background: Theme.bg-base;
+
+    // ---- source library -------------------------------------------------
+    in property <[FileEntry]> files;
+    in property <int> selected-index: -1;
+    in property <string> input-folder;
+    in property <bool> scanning: false;
+    callback choose-input-folder();
+    callback select-file(int);
+    callback delete-file(int);
+    in property <string> library-summary;
+
+    // ---- player ---------------------------------------------------------
+    in property <image> video-frame;
+    in property <bool> has-file: false;
+    in property <bool> playing: false;
+    in property <bool> muted: false;
+    in property <float> volume: 100;
+    in property <float> position;
+    in property <float> duration;
+    in property <string> position-label: "0:00";
+    in property <string> duration-label: "0:00";
+    in property <string> video-status;
+    // Physical size of the viewport, read by Rust to size mpv's framebuffer.
+    out property <length> viewport-width: video-area.width;
+    out property <length> viewport-height: video-area.height;
+
+    callback toggle-play();
+    callback step(int);
+    callback toggle-mute();
+    callback set-volume(float);
+    callback seek(float);
+
+    // ---- marks ----------------------------------------------------------
+    in property <float> mark-in: -1;
+    in property <float> mark-out: -1;
+    in property <float> ghost-in: -1;
+    // Path of the loaded file, so asynchronous probe results can be matched
+    // against what is on screen now rather than what was requested.
+    in property <string> current-file;
+    in property <string> selection-label;
+    in property <string> snap-note;
+    in property <string> hover-label;
+    callback set-mark-in();
+    callback set-mark-out();
+    callback clear-marks();
+    callback goto-mark(int);
+    callback hover-time(float);
+    callback hover-exit();
+
+    // ---- refine ---------------------------------------------------------
+    in property <bool> refining: false;
+    in property <bool> can-refine: false;
+    in property <float> view-start: 0;
+    in property <float> view-end: -1;
+    callback toggle-refine();
+
+    // ---- encoding -------------------------------------------------------
+    in property <bool> encoding-expanded: false;
+    in property <bool> precise: true;
+    in property <bool> audio-only: false;
+    in property <[string]> encoders;
+    in property <int> encoder-index;
+    in property <[string]> speeds;
+    in property <int> speed-index;
+    in property <[string]> containers;
+    in property <int> container-index;
+    in property <[string]> audio-modes;
+    in property <int> audio-index;
+    in property <int> quality;
+    in property <string> quality-label: "CRF";
+    in property <int> quality-min: 0;
+    in property <int> quality-max: 51;
+    in property <string> encoding-summary;
+    in property <string> encoding-warning;
+
+    callback toggle-encoding(bool);
+    callback set-mode(bool);
+    callback set-encoder(int);
+    callback set-speed(int);
+    callback set-container(int);
+    callback set-audio(int);
+    callback set-quality(int);
+
+    // ---- output ---------------------------------------------------------
+    in property <bool> output-expanded: true;
+    in property <string> output-folder;
+    in property <string> output-filename;
+    in property <string> output-extension: "mp4";
+    in property <bool> can-export: false;
+    in property <string> export-status;
+    in property <bool> exporting: false;
+    in property <float> export-progress;
+    in property <string> export-detail;
+
+    callback toggle-output(bool);
+    callback choose-output-folder();
+    callback set-filename(string);
+    callback export();
+    callback cancel-export();
+
+    // ---- about ----------------------------------------------------------
+    in property <string> version;
+    in-out property <bool> about-open: false;
+
+    forward-focus: keys;
+
+    Rectangle {
+        keys := FocusScope {
+        key-pressed(ev) => {
+            if (ev.text == " ") {
+                root.toggle-play();
+                return accept;
+            }
+            if (ev.text == Key.LeftArrow) {
+                root.seek(max(0, root.position - 5));
+                return accept;
+            }
+            if (ev.text == Key.RightArrow) {
+                root.seek(min(root.duration, root.position + 5));
+                return accept;
+            }
+            if (ev.text == ",") {
+                root.step(-1);
+                return accept;
+            }
+            if (ev.text == ".") {
+                root.step(1);
+                return accept;
+            }
+            if (ev.text == "i" || ev.text == "I") {
+                root.set-mark-in();
+                return accept;
+            }
+            if (ev.text == "o" || ev.text == "O") {
+                root.set-mark-out();
+                return accept;
+            }
+            if (ev.text == "m" || ev.text == "M") {
+                root.toggle-mute();
+                return accept;
+            }
+            if (ev.text == Key.Home) {
+                root.goto-mark(0);
+                return accept;
+            }
+            if (ev.text == Key.End) {
+                root.goto-mark(1);
+                return accept;
+            }
+            return reject;
+        }
+
+        HorizontalLayout {
+            // ---- left: source list ------------------------------------
+            Rectangle {
+                width: 280px;
+                FileList {
+                    width: 100%;
+                    height: 100%;
+                    files: root.files;
+                    selected-index: root.selected-index;
+                    folder: root.input-folder;
+                    scanning: root.scanning;
+                    summary: root.library-summary;
+                    select(i) => {
+                        root.select-file(i);
+                        keys.focus();
+                    }
+                    choose-folder => {
+                        root.choose-input-folder();
+                    }
+                    delete-file(i) => {
+                        root.delete-file(i);
+                    }
+                    show-about => {
+                        root.about-open = true;
+                    }
+                }
+            }
+
+            Rectangle {
+                width: 1px;
+                background: Theme.border;
+            }
+
+            // ---- right: player + panels -------------------------------
+            VerticalLayout {
+                horizontal-stretch: 1;
+
+                // Video viewport. The minimum stops an expanded settings panel
+                // from squeezing the picture out of existence.
+                video-area := Rectangle {
+                    vertical-stretch: 1;
+                    min-height: 200px;
+                    background: Theme.bg-video;
+                    clip: true;
+
+                    Image {
+                        width: 100%;
+                        height: 100%;
+                        source: root.video-frame;
+                        // mpv letterboxes inside the framebuffer we give it, and
+                        // that framebuffer is sized to this rect, so this is 1:1.
+                        image-fit: fill;
+                    }
+
+                    if !root.has-file: Text {
+                        width: 100%;
+                        height: 100%;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        text: root.video-status == "" ? "Select a video to begin" : root.video-status;
+                        font-size: Theme.fs-md;
+                        color: Theme.text-faint;
+                    }
+                }
+
+                Timeline {
+                    position: root.position;
+                    duration: root.duration;
+                    mark-in: root.mark-in;
+                    mark-out: root.mark-out;
+                    ghost-in: root.ghost-in;
+                    hover-label: root.hover-label;
+                    view-start: root.view-start;
+                    view-end: root.view-end;
+                    seek(t) => {
+                        root.seek(t);
+                    }
+                    hover-time(t) => {
+                        root.hover-time(t);
+                    }
+                    hover-exit => {
+                        root.hover-exit();
+                    }
+                }
+
+                Transport {
+                    playing: root.playing;
+                    muted: root.muted;
+                    volume: root.volume;
+                    position-label: root.position-label;
+                    duration-label: root.duration-label;
+                    selection-label: root.selection-label;
+                    has-file: root.has-file;
+                    has-mark-in: root.mark-in >= 0;
+                    has-mark-out: root.mark-out >= 0;
+                    refining: root.refining;
+                    can-refine: root.can-refine;
+                    toggle-play => {
+                        root.toggle-play();
+                    }
+                    step(d) => {
+                        root.step(d);
+                    }
+                    toggle-mute => {
+                        root.toggle-mute();
+                    }
+                    set-volume(v) => {
+                        root.set-volume(v);
+                    }
+                    set-mark-in => {
+                        root.set-mark-in();
+                    }
+                    set-mark-out => {
+                        root.set-mark-out();
+                    }
+                    clear-marks => {
+                        root.clear-marks();
+                    }
+                    goto-mark(w) => {
+                        root.goto-mark(w);
+                    }
+                    toggle-refine => {
+                        root.toggle-refine();
+                    }
+                }
+
+                // Keyframe-snap notice, only meaningful in Fast mode.
+                if root.snap-note != "": Rectangle {
+                    height: 24px;
+                    Text {
+                        x: Theme.sp-3;
+                        width: parent.width - Theme.sp-3 * 2;
+                        height: 100%;
+                        vertical-alignment: center;
+                        text: root.snap-note;
+                        font-size: Theme.fs-xs;
+                        font-family: Theme.font-mono;
+                        color: Theme.mark-ghost;
+                        overflow: elide;
+                    }
+                }
+
+                Rectangle {
+                    height: 1px;
+                    background: Theme.border;
+                }
+
+                // ---- settings panels ----------------------------------
+                // Natural height (stretch 0) so the panels take exactly what
+                // their content needs; the video keeps the remainder down to its
+                // own minimum. Deriving this height from the children instead
+                // creates a binding loop that Slint warns can panic at runtime.
+                VerticalLayout {
+                    vertical-stretch: 0;
+                    padding: Theme.sp-3;
+                    spacing: Theme.sp-2;
+
+                    EncodingPanel {
+                        expanded: root.encoding-expanded;
+                        summary: root.encoding-summary;
+                        precise: root.precise;
+                        audio-only: root.audio-only;
+                        encoders: root.encoders;
+                        encoder-index: root.encoder-index;
+                        speeds: root.speeds;
+                        speed-index: root.speed-index;
+                        containers: root.containers;
+                        container-index: root.container-index;
+                        audio-modes: root.audio-modes;
+                        audio-index: root.audio-index;
+                        quality: root.quality;
+                        quality-label: root.quality-label;
+                        quality-min: root.quality-min;
+                        quality-max: root.quality-max;
+                        warning: root.encoding-warning;
+
+                        toggled(v) => {
+                            root.toggle-encoding(v);
+                        }
+                        set-mode(v) => {
+                            root.set-mode(v);
+                        }
+                        set-encoder(i) => {
+                            root.set-encoder(i);
+                        }
+                        set-speed(i) => {
+                            root.set-speed(i);
+                        }
+                        set-container(i) => {
+                            root.set-container(i);
+                        }
+                        set-audio(i) => {
+                            root.set-audio(i);
+                        }
+                        set-quality(q) => {
+                            root.set-quality(q);
+                        }
+                    }
+
+                    OutputPanel {
+                        expanded: root.output-expanded;
+                        folder: root.output-folder;
+                        filename: root.output-filename;
+                        extension: root.output-extension;
+                        can-export: root.can-export;
+                        status: root.export-status;
+                        exporting: root.exporting;
+                        progress: root.export-progress;
+                        progress-detail: root.export-detail;
+
+                        toggled(v) => {
+                            root.toggle-output(v);
+                        }
+                        choose-folder => {
+                            root.choose-output-folder();
+                        }
+                        set-filename(v) => {
+                            root.set-filename(v);
+                        }
+                        export => {
+                            root.export();
+                        }
+                        cancel => {
+                            root.cancel-export();
+                        }
+                    }
+                }
+            }
+        }
+        }
+
+        // Sibling of the FocusScope, so it paints over the whole scene.
+        if root.about-open: About {
+            width: 100%;
+            height: 100%;
+            version: root.version;
+            dismiss => {
+                root.about-open = false;
+                keys.focus();
+            }
+        }
+    }
+}

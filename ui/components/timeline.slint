@@ -1,0 +1,153 @@
+import { Theme } from "../theme.slint";
+
+// Scrub bar with in/out marks.
+//
+// Marks use -1 for "unset" rather than a separate boolean, so Rust can hand over
+// one number per mark and the UI stays a pure function of it.
+export component Timeline inherits Rectangle {
+    in property <float> position;
+    in property <float> duration;
+    in property <float> mark-in: -1;
+    in property <float> mark-out: -1;
+    // Where a stream copy would really start, once snapped to a keyframe.
+    // Only meaningful in Fast mode; -1 hides it.
+    in property <float> ghost-in: -1;
+    in property <string> hover-label;
+
+    callback seek(float);
+    callback hover-time(float);
+    callback hover-exit();
+
+    // Visible window. Refine mode narrows this to just around the selection so
+    // a few seconds spread across the full width, making fine adjustment
+    // possible on a file where the whole clip is otherwise a few pixels wide.
+    in property <float> view-start: 0;
+    in property <float> view-end: -1;      // -1 means "the whole file"
+
+    height: 44px;
+
+    property <float> vs: root.view-end > root.view-start ? root.view-start : 0;
+    // Guard against a zero duration before a file is loaded.
+    property <float> ve: root.view-end > root.view-start ? root.view-end : max(root.duration, 0.001);
+    property <float> span: max(root.ve - root.vs, 0.001);
+    property <length> track-w: track.width;
+
+    function time-to-x(t: float) -> length {
+        return clamp((t - root.vs) / root.span, 0, 1) * root.track-w;
+    }
+    function x-to-time(x: length) -> float {
+        return root.vs + clamp(x / root.track-w, 0, 1) * root.span;
+    }
+    // Marks outside the visible window would otherwise clamp to the edge and
+    // look as though they sit there.
+    function in-view(t: float) -> bool {
+        return t >= root.vs && t <= root.ve;
+    }
+
+    VerticalLayout {
+        padding-left: Theme.sp-3;
+        padding-right: Theme.sp-3;
+        alignment: center;
+
+        track := Rectangle {
+            height: 22px;
+
+            // ---- groove --------------------------------------------------
+            Rectangle {
+                y: (parent.height - 6px) / 2;
+                width: 100%;
+                height: 6px;
+                border-radius: 3px;
+                background: Theme.bg-raised;
+            }
+
+            // ---- selected region ----------------------------------------
+            if root.mark-in >= 0 && root.mark-out > root.mark-in: Rectangle {
+                x: root.time-to-x(root.mark-in);
+                width: root.time-to-x(root.mark-out) - root.time-to-x(root.mark-in);
+                y: (parent.height - 6px) / 2;
+                height: 6px;
+                border-radius: 3px;
+                background: Theme.accent;
+                opacity: 0.55;
+            }
+
+            // ---- keyframe-snap ghost ------------------------------------
+            // Shown when a stream copy will start earlier than the mark.
+            if root.ghost-in >= 0 && root.in-view(root.ghost-in): Rectangle {
+                x: root.time-to-x(root.ghost-in) - 1px;
+                width: 2px;
+                height: 100%;
+                background: Theme.mark-ghost;
+            }
+
+            // ---- in / out marks -----------------------------------------
+            if root.mark-in >= 0 && root.in-view(root.mark-in): Rectangle {
+                x: root.time-to-x(root.mark-in) - 1px;
+                width: 2px;
+                height: 100%;
+                background: Theme.mark-in;
+            }
+
+            if root.mark-out >= 0 && root.in-view(root.mark-out): Rectangle {
+                x: root.time-to-x(root.mark-out) - 1px;
+                width: 2px;
+                height: 100%;
+                background: Theme.mark-out;
+            }
+
+            // ---- playhead ------------------------------------------------
+            if root.in-view(root.position): Rectangle {
+                x: root.time-to-x(root.position) - 1.5px;
+                width: 3px;
+                height: 100%;
+                border-radius: 1.5px;
+                background: Theme.text;
+            }
+
+            touch := TouchArea {
+                mouse-cursor: MouseCursor.pointer;
+
+                moved => {
+                    if (self.pressed) {
+                        root.seek(root.x-to-time(self.mouse-x));
+                    }
+                    root.hover-time(root.x-to-time(self.mouse-x));
+                }
+                pointer-event(ev) => {
+                    if (ev.button == PointerEventButton.left && ev.kind == PointerEventKind.down) {
+                        root.seek(root.x-to-time(self.mouse-x));
+                    }
+                }
+                changed has-hover => {
+                    if (!self.has-hover) {
+                        root.hover-exit();
+                    }
+                }
+            }
+
+            // ---- hover readout -------------------------------------------
+            if touch.has-hover && root.hover-label != "": Rectangle {
+                x: min(max(touch.mouse-x - self.width / 2, 0px), parent.width - self.width);
+                y: -22px;
+                width: hover-text.preferred-width + Theme.sp-2 * 2;
+                height: 20px;
+                border-radius: Theme.r-sm;
+                background: Theme.bg-active;
+                border-width: 1px;
+                border-color: Theme.border-strong;
+
+                hover-text := Text {
+                    width: 100%;
+                    height: 100%;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    text: root.hover-label;
+                    font-size: Theme.fs-xs;
+                    font-family: Theme.font-mono;
+                    color: Theme.text;
+                }
+            }
+        }
+    }
+}

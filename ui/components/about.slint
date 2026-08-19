@@ -1,0 +1,99 @@
+import { Theme, Btn } from "../theme.slint";
+
+// Attribution panel. Slint's royalty-free licence requires visible attribution,
+// and libmpv's LGPL requires its use to be stated, so this is a legal
+// requirement rather than decoration.
+export component About inherits Rectangle {
+    in property <string> version;
+    callback dismiss();
+
+    // Scrim: dims the app and swallows clicks outside the card.
+    background: #000000cc;
+
+    TouchArea {
+        clicked => {
+            root.dismiss();
+        }
+    }
+
+    Rectangle {
+        width: min(440px, parent.width - Theme.sp-6);
+        height: card.preferred-height;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        background: Theme.bg-panel;
+        border-radius: Theme.r-lg;
+        border-width: 1px;
+        border-color: Theme.border-strong;
+
+        // Clicks on the card itself must not dismiss it.
+        TouchArea { }
+
+        card := VerticalLayout {
+            padding: Theme.sp-5;
+            spacing: Theme.sp-3;
+
+            Text {
+                text: "ClipCut";
+                font-size: Theme.fs-xl;
+                font-weight: Theme.fw-bold;
+                color: Theme.text;
+            }
+
+            Text {
+                text: "Version " + root.version;
+                font-size: Theme.fs-sm;
+                color: Theme.text-faint;
+            }
+
+            Text {
+                text: "A fast video clipping tool: find a cut point, set marks, export.";
+                font-size: Theme.fs-sm;
+                color: Theme.text-dim;
+                wrap: word-wrap;
+            }
+
+            Rectangle {
+                height: 1px;
+                background: Theme.border;
+            }
+
+            Text {
+                text: "Built with";
+                font-size: Theme.fs-xs;
+                color: Theme.text-faint;
+            }
+
+            VerticalLayout {
+                spacing: Theme.sp-2;
+
+                Text {
+                    text: "Slint — slint.dev";
+                    font-size: Theme.fs-sm;
+                    color: Theme.text;
+                }
+                Text {
+                    text: "libmpv (LGPL-2.1) — mpv.io";
+                    font-size: Theme.fs-sm;
+                    color: Theme.text;
+                }
+                Text {
+                    text: "FFmpeg — ffmpeg.org, run as a separate process";
+                    font-size: Theme.fs-sm;
+                    color: Theme.text;
+                }
+            }
+
+            HorizontalLayout {
+                Rectangle { }
+                Btn {
+                    text: "Close";
+                    primary: true;
+                    clicked => {
+                        root.dismiss();
+                    }
+                }
+            }
+        }
+    }
+}

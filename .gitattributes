@@ -1,0 +1,16 @@
+# Normalise line endings so the repo is consistent regardless of the platform it
+# was committed from. Working copies still get native endings on checkout.
+* text=auto eol=lf
+
+# PowerShell is fine with LF, but keep CRLF for anything Windows might open in a
+# tool that is not.
+*.ps1 text eol=crlf
+*.txt text eol=crlf
+
+# Do not let Git rewrite bytes in binaries, should any ever be added.
+*.png binary
+*.ico binary
+*.mkv binary
+*.mp4 binary
+*.dll binary
+*.lib binary

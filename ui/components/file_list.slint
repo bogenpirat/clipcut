@@ -1,0 +1,254 @@
+import { Theme, Btn } from "../theme.slint";
+import { ListView } from "std-widgets.slint";
+
+// One source file. Rust supplies preformatted strings so the UI never has to
+// know about timestamps or byte counts.
+export struct FileEntry {
+    display-name: string,
+    // Relative path shown as a subtitle when recursing into subfolders.
+    sub-path: string,
+    modified: string,
+    duration: string,
+    path: string,
+}
+
+export component FileList inherits Rectangle {
+    in property <[FileEntry]> files;
+    in property <int> selected-index: -1;
+    in property <string> folder;
+    in property <bool> scanning: false;
+
+    // Preformatted by Rust, e.g. "7 files · 12.4 GB".
+    in property <string> summary;
+
+    callback select(int);
+    callback choose-folder();
+    callback show-about();
+    callback delete-file(int);
+
+    background: Theme.bg-panel;
+
+    VerticalLayout {
+        // ---- header ---------------------------------------------------
+        Rectangle {
+            height: 46px;
+            background: Theme.bg-panel;
+
+            HorizontalLayout {
+                padding-left: Theme.sp-3;
+                padding-right: Theme.sp-3;
+                spacing: Theme.sp-2;
+
+                VerticalLayout {
+                    alignment: center;
+                    spacing: 1px;
+
+                    Text {
+                        text: "Source";
+                        font-size: Theme.fs-xs;
+                        color: Theme.text-faint;
+                    }
+
+                    Text {
+                        text: root.folder == "" ? "No folder selected" : root.folder;
+                        font-size: Theme.fs-sm;
+                        color: Theme.text-dim;
+                        overflow: elide;
+                    }
+                }
+
+                Btn {
+                    text: "…";
+                    pad-h: Theme.sp-2;
+                    y: (parent.height - self.height) / 2;
+                    clicked => {
+                        root.choose-folder();
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            height: 1px;
+            background: Theme.border;
+        }
+
+        // ---- list -----------------------------------------------------
+        Rectangle {
+            vertical-stretch: 1;
+
+            if root.files.length == 0: Text {
+                width: 100%;
+                height: 100%;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                wrap: word-wrap;
+                font-size: Theme.fs-sm;
+                color: Theme.text-faint;
+                text: root.scanning ? "Scanning…"
+                    : root.folder == "" ? "Choose a folder to get started"
+                    : "No video files found";
+            }
+
+            if root.files.length > 0: ListView {
+                width: 100%;
+                height: 100%;
+
+                for file[i] in root.files: Rectangle {
+                    height: 52px;
+                    background: i == root.selected-index ? Theme.accent-dim
+                        : row-touch.has-hover ? Theme.bg-hover : transparent;
+                    animate background { duration: Theme.anim; }
+
+                    // Selection marker, so the active row is obvious at a glance.
+                    Rectangle {
+                        x: 0;
+                        width: 2px;
+                        height: 100%;
+                        background: i == root.selected-index ? Theme.accent : transparent;
+                    }
+
+                    // Declared before the row content: later siblings receive
+                    // input first in Slint, so a row-wide TouchArea placed last
+                    // would swallow clicks meant for the delete button.
+                    row-touch := TouchArea {
+                        mouse-cursor: MouseCursor.pointer;
+                        clicked => {
+                            root.select(i);
+                        }
+                    }
+
+                    HorizontalLayout {
+                        padding-left: Theme.sp-3;
+                        padding-right: Theme.sp-3;
+                        padding-top: Theme.sp-2;
+                        padding-bottom: Theme.sp-2;
+                        spacing: Theme.sp-2;
+
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 2px;
+                            horizontal-stretch: 1;
+
+                            Text {
+                                text: file.display-name;
+                                font-size: Theme.fs-md;
+                                color: Theme.text;
+                                overflow: elide;
+                            }
+
+                            HorizontalLayout {
+                                spacing: Theme.sp-2;
+
+                                Text {
+                                    text: file.modified;
+                                    font-size: Theme.fs-xs;
+                                    color: Theme.text-faint;
+                                }
+
+                                if file.duration != "": Text {
+                                    text: file.duration;
+                                    font-size: Theme.fs-xs;
+                                    font-family: Theme.font-mono;
+                                    color: Theme.text-faint;
+                                }
+
+                                Rectangle { }
+                            }
+
+                            if file.sub-path != "": Text {
+                                text: file.sub-path;
+                                font-size: Theme.fs-xs;
+                                color: Theme.text-faint;
+                                overflow: elide;
+                            }
+                        }
+
+                        // Deleting is only offered for the selected row: the app
+                        // must release its handle on the file first, and it can
+                        // only do that for the file it currently has open.
+                        VerticalLayout {
+                            alignment: center;
+                            width: i == root.selected-index ? 24px : 0px;
+
+                            if i == root.selected-index: Rectangle {
+                                width: 24px;
+                                height: 24px;
+                                border-radius: Theme.r-sm;
+                                background: del-touch.has-hover ? Theme.danger : transparent;
+                                animate background { duration: Theme.anim; }
+
+                                Text {
+                                    width: 100%;
+                                    height: 100%;
+                                    text: "🗑";
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                    font-size: Theme.fs-sm;
+                                    color: del-touch.has-hover ? #ffffff : Theme.text-faint;
+                                }
+
+                                del-touch := TouchArea {
+                                    mouse-cursor: MouseCursor.pointer;
+                                    clicked => {
+                                        root.delete-file(i);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                }
+            }
+        }
+
+        Rectangle {
+            height: 1px;
+            background: Theme.border;
+        }
+
+        // ---- footer ---------------------------------------------------
+        Rectangle {
+            height: 26px;
+
+            HorizontalLayout {
+                padding-left: Theme.sp-3;
+                padding-right: Theme.sp-2;
+
+                Text {
+                    vertical-alignment: center;
+                    font-size: Theme.fs-xs;
+                    color: Theme.text-faint;
+                    text: root.summary;
+                    overflow: elide;
+                }
+
+                Rectangle { }
+
+                // Attribution is a licence requirement, so it needs a way in.
+                Rectangle {
+                    width: about-text.preferred-width + Theme.sp-2 * 2;
+                    background: about-touch.has-hover ? Theme.bg-hover : transparent;
+                    border-radius: Theme.r-sm;
+
+                    about-text := Text {
+                        width: 100%;
+                        height: 100%;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        text: "About";
+                        font-size: Theme.fs-xs;
+                        color: about-touch.has-hover ? Theme.text : Theme.text-faint;
+                    }
+
+                    about-touch := TouchArea {
+                        mouse-cursor: MouseCursor.pointer;
+                        clicked => {
+                            root.show-about();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,253 @@
+import { Theme, IconBtn, Btn } from "../theme.slint";
+
+// A Set In / Set Out button that shows whether its mark is placed.
+component MarkBtn inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    in property <bool> marked: false;
+    in property <brush> tint;
+    callback clicked();
+
+    horizontal-stretch: 0;
+    height: 26px;
+    min-width: label.preferred-width + Theme.sp-3 * 2;
+    border-radius: Theme.r-sm;
+    background: !root.enabled ? Theme.bg-raised
+        : root.marked ? root.tint.darker(0.55)
+        : (touch.has-hover ? Theme.bg-hover : Theme.bg-raised);
+    border-width: 1px;
+    border-color: root.marked && root.enabled ? root.tint : Theme.border;
+    animate background, border-color { duration: Theme.anim; }
+
+    label := Text {
+        x: Theme.sp-3;
+        width: parent.width - Theme.sp-3 * 2;
+        height: 100%;
+        text: root.text;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        font-size: Theme.fs-md;
+        color: !root.enabled ? Theme.text-faint
+            : root.marked ? root.tint : Theme.text;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+// Playback controls and mark actions.
+export component Transport inherits Rectangle {
+    in property <bool> playing;
+    in property <bool> muted;
+    in property <float> volume;          // 0-130, mpv's scale
+    in property <string> position-label;
+    in property <string> duration-label;
+    in property <string> selection-label;
+    in property <bool> has-file: false;
+    in property <bool> has-mark-in: false;
+    in property <bool> has-mark-out: false;
+    in property <bool> refining: false;
+    in property <bool> can-refine: false;
+
+    callback toggle-play();
+    callback step(int);
+    callback toggle-mute();
+    callback set-volume(float);
+    callback set-mark-in();
+    callback set-mark-out();
+    callback clear-marks();
+    callback goto-mark(int);
+    callback toggle-refine();
+
+    height: 44px;
+
+    HorizontalLayout {
+        padding-left: Theme.sp-3;
+        padding-right: Theme.sp-3;
+        spacing: Theme.sp-1;
+        alignment: start;
+
+        VerticalLayout {
+            alignment: center;
+            HorizontalLayout {
+                spacing: Theme.sp-1;
+
+                IconBtn {
+                    glyph: root.playing ? "⏸" : "▶";
+                    enabled: root.has-file;
+                    clicked => {
+                        root.toggle-play();
+                    }
+                }
+                IconBtn {
+                    glyph: "⏮";
+                    enabled: root.has-file;
+                    clicked => {
+                        root.step(-1);
+                    }
+                }
+                IconBtn {
+                    glyph: "⏭";
+                    enabled: root.has-file;
+                    clicked => {
+                        root.step(1);
+                    }
+                }
+            }
+        }
+
+        // ---- volume ---------------------------------------------------
+        VerticalLayout {
+            alignment: center;
+            HorizontalLayout {
+                spacing: Theme.sp-1;
+
+                IconBtn {
+                    glyph: root.muted || root.volume == 0 ? "🔇" : "🔊";
+                    active: root.muted;
+                    clicked => {
+                        root.toggle-mute();
+                    }
+                }
+
+                // Simple custom slider: std-widgets' Slider cannot be themed.
+                vol := Rectangle {
+                    width: 76px;
+                    height: 28px;
+                    property <length> track-w: self.width - 8px;
+
+                    Rectangle {
+                        x: 4px;
+                        y: (parent.height - 4px) / 2;
+                        width: parent.track-w;
+                        height: 4px;
+                        border-radius: 2px;
+                        background: Theme.bg-raised;
+                    }
+
+                    Rectangle {
+                        x: 4px;
+                        y: (parent.height - 4px) / 2;
+                        width: parent.track-w * clamp(root.volume / 130, 0, 1);
+                        height: 4px;
+                        border-radius: 2px;
+                        background: root.muted ? Theme.text-faint : Theme.accent;
+                    }
+
+                    Rectangle {
+                        x: 4px + parent.track-w * clamp(root.volume / 130, 0, 1) - 5px;
+                        y: (parent.height - 10px) / 2;
+                        width: 10px;
+                        height: 10px;
+                        border-radius: 5px;
+                        background: root.muted ? Theme.text-faint : Theme.text;
+                    }
+
+                    vol-touch := TouchArea {
+                        mouse-cursor: MouseCursor.pointer;
+                        moved => {
+                            if (self.pressed) {
+                                root.set-volume(clamp((self.mouse-x - 4px) / parent.track-w, 0, 1) * 130);
+                            }
+                        }
+                        pointer-event(ev) => {
+                            if (ev.button == PointerEventButton.left && ev.kind == PointerEventKind.down) {
+                                root.set-volume(clamp((self.mouse-x - 4px) / parent.track-w, 0, 1) * 130);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---- timecode -------------------------------------------------
+        VerticalLayout {
+            alignment: center;
+            HorizontalLayout {
+                padding-left: Theme.sp-2;
+                spacing: Theme.sp-1;
+
+                Text {
+                    vertical-alignment: center;
+                    text: root.position-label;
+                    font-size: Theme.fs-md;
+                    font-family: Theme.font-mono;
+                    color: Theme.text;
+                }
+                Text {
+                    vertical-alignment: center;
+                    text: "/";
+                    font-size: Theme.fs-md;
+                    color: Theme.text-faint;
+                }
+                Text {
+                    vertical-alignment: center;
+                    text: root.duration-label;
+                    font-size: Theme.fs-md;
+                    font-family: Theme.font-mono;
+                    color: Theme.text-dim;
+                }
+            }
+        }
+
+        Rectangle { horizontal-stretch: 1; }
+
+        // ---- marks ----------------------------------------------------
+        VerticalLayout {
+            alignment: center;
+            HorizontalLayout {
+                spacing: Theme.sp-2;
+
+                if root.selection-label != "": Text {
+                    vertical-alignment: center;
+                    text: root.selection-label;
+                    font-size: Theme.fs-sm;
+                    font-family: Theme.font-mono;
+                    color: Theme.accent;
+                }
+
+                // A set mark is tinted in its own timeline colour, so the button
+                // state and the marker on the timeline read as the same thing.
+                MarkBtn {
+                    text: "Set In";
+                    enabled: root.has-file;
+                    marked: root.has-mark-in;
+                    tint: Theme.mark-in;
+                    clicked => {
+                        root.set-mark-in();
+                    }
+                }
+                MarkBtn {
+                    text: "Set Out";
+                    enabled: root.has-file;
+                    marked: root.has-mark-out;
+                    tint: Theme.mark-out;
+                    clicked => {
+                        root.set-mark-out();
+                    }
+                }
+                Btn {
+                    text: "Clear";
+                    enabled: root.has-file && (root.has-mark-in || root.has-mark-out);
+                    clicked => {
+                        root.clear-marks();
+                    }
+                }
+                Btn {
+                    text: root.refining ? "Done" : "Refine";
+                    primary: root.refining;
+                    // Only meaningful once there is a span to zoom into.
+                    enabled: root.can-refine;
+                    clicked => {
+                        root.toggle-refine();
+                    }
+                }
+            }
+        }
+    }
+}
