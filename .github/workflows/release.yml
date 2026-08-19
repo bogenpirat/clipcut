@@ -9,9 +9,9 @@ on:
         required: true
         type: string
       draft:
-        description: "Create as a draft, so it can be reviewed before publishing"
+        description: "Hold as a draft instead of publishing straight away"
         required: false
-        default: true
+        default: false
         type: boolean
       prerelease:
         description: "Mark as a pre-release"
