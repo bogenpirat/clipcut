@@ -184,6 +184,52 @@ fn main() -> Result<()> {
         }
     }
 
+    // ---- encoder availability ----------------------------------------------
+    // Probing runs a one-frame encode per hardware encoder, which needs a real
+    // driver and card, so it happens on a worker thread rather than delaying
+    // startup. Until it reports, everything is assumed available.
+    if let Ok(t) = &tools {
+        let t = t.clone();
+        let weak = ui.as_weak();
+        std::thread::Builder::new()
+            .name("encoder-probe".into())
+            .spawn(move || {
+                let candidates: Vec<&str> = ENCODERS.iter().map(|(_, e)| e.ffmpeg_name()).collect();
+                let usable = t.usable_encoders(&candidates);
+                let available: Vec<bool> = ENCODERS
+                    .iter()
+                    .map(|(_, e)| usable.contains(e.ffmpeg_name()))
+                    .collect();
+                println!(
+                    "ENCODERS usable: {}",
+                    ENCODERS
+                        .iter()
+                        .zip(&available)
+                        .filter(|(_, ok)| **ok)
+                        .map(|((_, e), _)| e.ffmpeg_name())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+                let _ = weak.upgrade_in_event_loop(move |ui| {
+                    let labels: Vec<slint::SharedString> = ENCODERS
+                        .iter()
+                        .zip(&available)
+                        .map(|((label, _), ok)| {
+                            if *ok {
+                                (*label).into()
+                            } else {
+                                format!("{label} — unavailable").into()
+                            }
+                        })
+                        .collect();
+                    ui.set_encoders(slint::ModelRc::new(slint::VecModel::from(labels)));
+                    ui.set_encoder_available(slint::ModelRc::new(slint::VecModel::from(available)));
+                    refresh_encoder_warning(&ui);
+                });
+            })
+            .expect("spawn encoder probe");
+    }
+
     let snap_probe = tools.as_ref().ok().map(|t| {
         Rc::new(SnapProbe::new(t.clone(), {
             let weak = ui.as_weak();
@@ -1049,11 +1095,43 @@ fn show_marks(ui: &AppWindow, marks: Marks) {
         ui.set_view_start(0.0);
         ui.set_view_end(-1.0);
     }
-    ui.set_can_export(ready && !ui.get_output_folder().is_empty() && !ui.get_exporting());
+    // Only a re-encode actually runs the chosen video encoder; a stream copy or
+    // an audio-only export does not care whether it exists.
+    let encoder_ok = ui.get_audio_only() || !ui.get_precise() || ui.get_encoder_available_now();
+    ui.set_can_export(
+        ready && encoder_ok && !ui.get_output_folder().is_empty() && !ui.get_exporting(),
+    );
     ui.set_export_status(match marks.missing() {
         Some(note) => note.into(),
         None if ui.get_output_folder().is_empty() => "Choose an output folder".into(),
         None => slint::SharedString::from("Ready to export"),
+    });
+}
+
+/// Warn when the chosen encoder cannot run on this machine.
+///
+/// The common case is an NVENC encoder compiled into ffmpeg on a machine with no
+/// NVIDIA card: it looks available until the export fails.
+fn refresh_encoder_warning(ui: &AppWindow) {
+    let index = ui.get_encoder_index();
+    let available = ui.get_encoder_available();
+    let ok = available
+        .row_data(index as usize)
+        // Assume available until the probe has reported.
+        .unwrap_or(true);
+
+    ui.set_encoder_available_now(ok);
+    ui.set_encoding_warning(if ok {
+        Default::default()
+    } else {
+        let needs_gpu = ENCODERS
+            .get(index as usize)
+            .is_some_and(|(_, e)| e.needs_nvidia());
+        if needs_gpu {
+            "This encoder needs an NVIDIA GPU that ffmpeg can reach. Choose another.".into()
+        } else {
+            "Your ffmpeg build does not provide this encoder. Choose another.".into()
+        }
     });
 }
 
@@ -1065,6 +1143,7 @@ fn sync_encoding_to_ui(ui: &AppWindow, settings: &Settings) {
 
     ui.set_precise(precise);
     ui.set_audio_only(e.container.is_audio_only());
+    refresh_encoder_warning(ui);
     ui.set_encoder_index(index_of(&ENCODERS, &e.video));
     ui.set_speed_index(index_of(&SPEEDS, &e.speed));
     ui.set_container_index(index_of(&CONTAINERS, &e.container));

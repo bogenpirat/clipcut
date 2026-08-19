@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# A new push to the same branch makes the previous run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Pinned so builds are reproducible and the download can be cached. Bump it
+  # deliberately; leaving it unset would silently pull whatever mpv released today.
+  MPV_TAG: 2026-08-18-e7191f2a65
+
+jobs:
+  debug:
+    name: Debug build and tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      # libmpv is not on crates.io: the import library has to be synthesised
+      # from the DLL's exports before anything will link. See scripts/setup-mpv.ps1.
+      - name: Cache libmpv
+        id: mpv-cache
+        uses: actions/cache@v4
+        with:
+          path: third_party
+          key: mpv-${{ runner.os }}-${{ env.MPV_TAG }}
+
+      - name: Fetch libmpv
+        if: steps.mpv-cache.outputs.cache-hit != 'true'
+        run: .\scripts\setup-mpv.ps1 -Tag $env:MPV_TAG
+
+      # Integration tests shell out to ffmpeg; without it they skip themselves
+      # and the suite would pass while proving much less.
+      - name: Install ffmpeg
+        run: choco install ffmpeg --no-progress -y
+
+      - name: Formatting
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Build
+        run: cargo build --all-targets
+
+      - name: Test
+        run: cargo test
+
+  release:
+    name: Release build
+    # Only for master: every other push gets the debug job alone, as intended.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release
+
+      - name: Cache libmpv
+        id: mpv-cache
+        uses: actions/cache@v4
+        with:
+          path: third_party
+          key: mpv-${{ runner.os }}-${{ env.MPV_TAG }}
+
+      - name: Fetch libmpv
+        if: steps.mpv-cache.outputs.cache-hit != 'true'
+        run: .\scripts\setup-mpv.ps1 -Tag $env:MPV_TAG
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Package
+        run: .\scripts\package.ps1 -Profile release -SkipBuild
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clipcut-master-release
+          path: dist/*.zip
+          retention-days: 14

@@ -34,6 +34,14 @@ pub enum VideoEncoder {
 }
 
 impl VideoEncoder {
+    /// True when this encoder needs an NVIDIA GPU with NVENC.
+    ///
+    /// Presence in `ffmpeg -encoders` only proves the build has the encoder
+    /// compiled in, not that a card is present — see [`crate::media::Tools`].
+    pub fn needs_nvidia(self) -> bool {
+        self.is_nvenc()
+    }
+
     pub fn ffmpeg_name(self) -> &'static str {
         match self {
             Self::X264 => "libx264",

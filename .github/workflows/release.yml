@@ -1,0 +1,116 @@
+name: Release
+
+# Manual only. Cutting a release is a decision, not something a push should do.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.2.0 (no leading v)"
+        required: true
+        type: string
+      draft:
+        description: "Create as a draft, so it can be reviewed before publishing"
+        required: false
+        default: true
+        type: boolean
+      prerelease:
+        description: "Mark as a pre-release"
+        required: false
+        default: false
+        type: boolean
+
+env:
+  CARGO_TERM_COLOR: always
+  MPV_TAG: 2026-08-18-e7191f2a65
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fail early on a malformed version rather than after two builds, and
+      # refuse to clobber a tag that already exists.
+      - name: Validate inputs
+        shell: pwsh
+        run: |
+          $v = '${{ inputs.version }}'.Trim()
+          if ($v -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
+            throw "version '$v' is not semver, e.g. 0.2.0 or 1.0.0-rc.1"
+          }
+          git fetch --tags --quiet
+          if (git tag --list "v$v") {
+            throw "tag v$v already exists; pick a new version or delete the tag"
+          }
+          "Releasing v$v"
+
+      # The version in the tag must match what the About box reports, or the
+      # binary will disagree with the download it came from.
+      - name: Check Cargo.toml version matches
+        shell: pwsh
+        run: |
+          $v = '${{ inputs.version }}'.Trim()
+          $manifest = (Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"' |
+            Select-Object -First 1).Matches[0].Groups[1].Value
+          if ($manifest -ne $v) {
+            throw "Cargo.toml says $manifest but you asked to release $v. Update Cargo.toml, commit, then re-run."
+          }
+          "Cargo.toml version $manifest matches"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Cache libmpv
+        id: mpv-cache
+        uses: actions/cache@v4
+        with:
+          path: third_party
+          key: mpv-${{ runner.os }}-${{ env.MPV_TAG }}
+
+      - name: Fetch libmpv
+        if: steps.mpv-cache.outputs.cache-hit != 'true'
+        run: .\scripts\setup-mpv.ps1 -Tag $env:MPV_TAG
+
+      - name: Install ffmpeg
+        run: choco install ffmpeg --no-progress -y
+
+      # Do not publish something that does not pass its own tests.
+      - name: Test
+        run: cargo test
+
+      - name: Package release
+        run: .\scripts\package.ps1 -Profile release -Version '${{ inputs.version }}'
+
+      # Shipped alongside the release build: it keeps the console and the
+      # diagnostic hooks, which is what makes a bug report actionable.
+      - name: Package debug
+        run: .\scripts\package.ps1 -Profile debug -Version '${{ inputs.version }}'
+
+      - name: List artifacts
+        shell: pwsh
+        run: Get-ChildItem dist\*.zip | Select-Object Name, @{n='MB';e={[math]::Round($_.Length/1MB,1)}}
+
+      - name: Create release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = '${{ inputs.version }}'.Trim()
+          # Not $args: that is a PowerShell automatic variable and assigning to
+          # it inside a script block does not behave the way it reads.
+          $ghArgs = @('release', 'create', "v$v",
+                      '--title', "ClipCut v$v",
+                      '--generate-notes',
+                      '--target', '${{ github.sha }}')
+          if ('${{ inputs.draft }}' -eq 'true') { $ghArgs += '--draft' }
+          if ('${{ inputs.prerelease }}' -eq 'true') { $ghArgs += '--prerelease' }
+          $ghArgs += (Get-ChildItem dist\*.zip | ForEach-Object { $_.FullName })
+          gh @ghArgs

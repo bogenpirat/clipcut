@@ -18,61 +18,6 @@ PowerShell, and no other platform has been tried.
 A file path may also be passed as a command-line argument, which loads it directly and
 bypasses the list.
 
-### Keyboard
-
-`Space` play/pause · `←`/`→` ±5 s · `,`/`.` frame back/forward · `I`/`O` set in/out ·
-`Home`/`End` jump to a mark · `M` mute
-
-### Layout
-
-```
-src/
-  main.rs        GUI wiring: callbacks, event marshalling, persistence
-  render.rs      mpv <-> Slint GL texture bridge (binary-only; needs Slint types)
-  lib.rs         everything below is a library, so it can be tested headlessly
-  config.rs      settings + debounced atomic persistence
-  library.rs     recursive scan, mtime sort, filesystem watcher, scan queue
-  marks.rs       in/out marks and what makes a selection exportable
-  media.rs       ffmpeg discovery, keyframe probing, snap positions
-  player.rs      mpv control; reports PlayerEvents, knows nothing about the UI
-  timecode.rs    formatting and parsing
-  export.rs      spawns ffmpeg, parses progress, cancels, avoids overwriting
-  encode/        ffmpeg argv construction and -progress parsing
-ui/
-  theme.slint    design tokens + shared primitives (Btn, IconBtn, Section, Field)
-  app.slint      root window
-  components/    file_list, timeline, transport, panels
-```
-
----
-
-## Why this stack
-
-Seek speed comes from the demuxer/decoder, not the UI toolkit, so the load-bearing
-choice is **libmpv**: hardware decode, frame-exact `hr-seek`, frame stepping, and native
-Matroska support. Chromium-based shells were ruled out first — Chromium cannot demux
-Matroska at all, so `.mkv` will never play in a `<video>` tag.
-
-Among native toolkits, the discriminator is mpv's **render API** versus `--wid`. With
-`--wid` the video is a foreign child window that always sits above the UI: no overlays,
-plus clipping and resize artifacts. With the render API mpv draws into *our* GL texture,
-so the video is just an image in the scene graph and markers composite over it cleanly.
-
-ffmpeg runs as a **subprocess**, not via libav\* bindings: `fftools/ffmpeg.c` is tens of
-thousands of lines of stream mapping and timestamp correction that we would otherwise
-have to reimplement, and a subprocess keeps the exact argv reproducible in a terminal.
-
-### Measured seek performance
-
-25 scattered **frame-exact** seeks (`absolute+exact`), debug build, RTX 4080 / nvdec:
-
-| File | min | median | max |
-|---|---|---|---|
-| 10-min 1080p H.264 | 36 ms | **86 ms** | 168 ms |
-| 20-s 720p AV1 | 38 ms | **41 ms** | 123 ms |
-
----
-
 ## Prerequisites
 
 | Requirement | Notes |

@@ -69,6 +69,53 @@ impl Tools {
         parse_encoders(&String::from_utf8_lossy(&out.stdout))
     }
 
+    /// Whether an encoder can actually be used on this machine.
+    ///
+    /// Listing in `ffmpeg -encoders` only proves the binary was *built* with the
+    /// encoder. NVENC additionally needs an NVIDIA driver and a card that
+    /// supports the codec — a full ffmpeg build on an AMD machine still lists
+    /// `h264_nvenc`, and only fails when you try to use it. The sole reliable
+    /// test is to encode a frame and see whether it works.
+    ///
+    /// Costs one short ffmpeg run, so call it off the UI thread.
+    pub fn can_encode(&self, encoder: &str) -> bool {
+        Command::new(&self.ffmpeg)
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "nullsrc=s=256x144:r=25:d=0.2",
+                "-c:v",
+                encoder,
+                "-frames:v",
+                "1",
+                "-f",
+                "null",
+                "-",
+            ])
+            .output()
+            .map(|out| out.status.success())
+            .unwrap_or(false)
+    }
+
+    /// Filter `candidates` down to the encoders this machine can really use.
+    ///
+    /// Skips the encode test for anything the build does not contain at all,
+    /// so the common case costs one `-encoders` call plus a probe per plausible
+    /// hardware encoder.
+    pub fn usable_encoders<'a>(&self, candidates: &[&'a str]) -> HashSet<&'a str> {
+        let built_in = self.encoders();
+        candidates
+            .iter()
+            .filter(|name| built_in.contains(**name))
+            .filter(|name| self.can_encode(name))
+            .copied()
+            .collect()
+    }
+
     /// Keyframe timestamps in a window around `around`, in seconds.
     pub fn keyframes_near(&self, file: &Path, around: f64) -> Result<Vec<f64>> {
         let start = (around - LOOKBACK_SECONDS).max(0.0);

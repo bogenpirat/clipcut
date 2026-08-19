@@ -81,6 +81,48 @@ fn probes_real_keyframes_at_the_expected_interval() {
     }
 }
 
+/// libx264 is present in every sane ffmpeg build and needs no special hardware,
+/// so it is the one encoder that must always come back usable.
+#[test]
+fn a_software_encoder_is_always_usable() {
+    let Some(tools) = tools() else {
+        eprintln!("skipping: ffmpeg not available");
+        return;
+    };
+    assert!(tools.can_encode("libx264"), "libx264 should be usable");
+}
+
+#[test]
+fn a_nonexistent_encoder_is_rejected() {
+    let Some(tools) = tools() else {
+        eprintln!("skipping: ffmpeg not available");
+        return;
+    };
+    assert!(!tools.can_encode("definitely_not_an_encoder"));
+}
+
+/// The distinction that motivates the probe: an encoder can be compiled into the
+/// build yet unusable because the hardware is absent.
+#[test]
+fn usable_encoders_is_a_subset_of_what_the_build_contains() {
+    let Some(tools) = tools() else {
+        eprintln!("skipping: ffmpeg not available");
+        return;
+    };
+    let candidates = ["libx264", "h264_nvenc", "hevc_nvenc", "av1_nvenc"];
+    let built_in = tools.encoders();
+    let usable = tools.usable_encoders(&candidates);
+
+    assert!(usable.contains("libx264"));
+    for name in &usable {
+        assert!(
+            built_in.contains(*name),
+            "{name} reported usable but is not in the build"
+        );
+    }
+    eprintln!("usable on this machine: {usable:?}");
+}
+
 #[test]
 fn snap_lands_before_a_mark_placed_mid_gop() {
     let Some(tools) = tools() else {

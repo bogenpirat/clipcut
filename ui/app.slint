@@ -88,6 +88,10 @@ export component AppWindow inherits Window {
     in property <int> quality-max: 51;
     in property <string> encoding-summary;
     in property <string> encoding-warning;
+    // Parallel to ncoders: whether each one can actually run here.
+    in property <[bool]> encoder-available;
+    // Whether the currently selected encoder is usable.
+    in property <bool> encoder-available-now: true;
 
     callback toggle-encoding(bool);
     callback set-mode(bool);

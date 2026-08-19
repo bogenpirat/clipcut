@@ -12,10 +12,15 @@
     lives in the GPL-only parts.
 
     Idempotent - re-running only redoes missing pieces unless -Force is passed.
+.PARAMETER Tag
+    Pin a specific mpv-winbuild release tag, e.g. 2026-08-18-e7191f2a65.
+    Defaults to the latest release. CI pins a tag so builds are reproducible and
+    the download can be cached; interactive use generally wants the latest.
 #>
 [CmdletBinding()]
 param(
-    [switch]$Force
+    [switch]$Force,
+    [string]$Tag
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,8 +32,14 @@ $lib = Join-Path $mpvDir "mpv.lib"
 
 # ---- 1. download + extract -------------------------------------------------
 if ($Force -or -not (Test-Path $dll)) {
-    Write-Host "Resolving latest mpv-winbuild release..."
-    $release = Invoke-RestMethod "https://api.github.com/repos/zhongfly/mpv-winbuild/releases/latest" `
+    $endpoint = if ($Tag) {
+        "https://api.github.com/repos/zhongfly/mpv-winbuild/releases/tags/$Tag"
+    }
+    else {
+        "https://api.github.com/repos/zhongfly/mpv-winbuild/releases/latest"
+    }
+    Write-Host "Resolving mpv-winbuild release ($(if ($Tag) { $Tag } else { 'latest' }))..."
+    $release = Invoke-RestMethod $endpoint `
         -Headers @{ "User-Agent" = "clipcut-setup" }
 
     # Plain x86_64 (not -v3) for broader CPU compatibility.
