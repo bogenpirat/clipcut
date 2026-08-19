@@ -28,7 +28,11 @@ param(
 $ErrorActionPreference = "Stop"
 
 # ---- MSVC toolchain (newest complete one wins) -----------------------------
-$vc = Get-ChildItem "${env:ProgramFiles(x86)}\Microsoft Visual Studio\*\*\VC\Tools\MSVC\*" -Directory -ErrorAction SilentlyContinue |
+# Both roots: Visual Studio 2022 and later install 64-bit to %ProgramFiles%,
+# while earlier versions live under %ProgramFiles(x86)%.
+$vsRoots = @($env:ProgramFiles, ${env:ProgramFiles(x86)}) | Where-Object { $_ }
+$vc = $vsRoots |
+    ForEach-Object { Get-ChildItem "$_\Microsoft Visual Studio\*\*\VC\Tools\MSVC\*" -Directory -ErrorAction SilentlyContinue } |
     Where-Object { Test-Path (Join-Path $_.FullName "lib\x64\msvcrt.lib") } |
     Sort-Object Name | Select-Object -Last 1
 

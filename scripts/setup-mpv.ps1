@@ -67,9 +67,17 @@ if ($Force -or -not (Test-Path $dll)) {
 
 # ---- 2. locate MSVC tooling ------------------------------------------------
 if ($Force -or -not (Test-Path $lib)) {
-    $msvcRoot = Get-ChildItem "${env:ProgramFiles(x86)}\Microsoft Visual Studio\*\*\VC\Tools\MSVC\*\bin\Hostx64\x64\lib.exe" `
-        -ErrorAction SilentlyContinue | Sort-Object FullName | Select-Object -Last 1
-    if (-not $msvcRoot) { throw "could not locate MSVC lib.exe" }
+    # Both roots: Visual Studio 2022 and later install 64-bit to %ProgramFiles%,
+    # while earlier versions live under %ProgramFiles(x86)%.
+    $vsRoots = @($env:ProgramFiles, ${env:ProgramFiles(x86)}) | Where-Object { $_ }
+    $msvcRoot = $vsRoots |
+        ForEach-Object {
+            Get-ChildItem "$_\Microsoft Visual Studio\*\*\VC\Tools\MSVC\*\bin\Hostx64\x64\lib.exe" -ErrorAction SilentlyContinue
+        } |
+        Sort-Object FullName | Select-Object -Last 1
+    if (-not $msvcRoot) {
+        throw "could not locate MSVC lib.exe under: $($vsRoots -join ', ')"
+    }
     $binDir = Split-Path -Parent $msvcRoot.FullName
 
     # ---- 3. DLL exports -> .def -> .lib ------------------------------------
