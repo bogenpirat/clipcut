@@ -184,13 +184,15 @@ fn nvenc_constant_quality_flags_are_accepted() {
         eprintln!("skipping: ffmpeg not on PATH");
         return;
     }
-    // Only meaningful where an NVIDIA encoder exists.
-    let encoders = Command::new("ffmpeg")
-        .args(["-hide_banner", "-encoders"])
-        .output()
-        .expect("spawn ffmpeg");
-    if !String::from_utf8_lossy(&encoders.stdout).contains("h264_nvenc") {
-        eprintln!("skipping: h264_nvenc not available in this build");
+    // Presence in `ffmpeg -encoders` is not enough: CI runners have an ffmpeg
+    // built with h264_nvenc but no NVIDIA card, where it fails with
+    // "Cannot load nvcuda.dll". Only an actual encode settles it.
+    let Ok(tools) = clipcut::media::Tools::discover(None) else {
+        eprintln!("skipping: ffmpeg not found");
+        return;
+    };
+    if !tools.can_encode("h264_nvenc") {
+        eprintln!("skipping: h264_nvenc is not usable on this machine");
         return;
     }
 
