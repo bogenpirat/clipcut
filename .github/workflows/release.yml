@@ -31,7 +31,7 @@ jobs:
     name: Build and publish
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Fail early on a malformed version rather than after two builds, and
       # refuse to clobber a tag that already exists.
@@ -70,7 +70,7 @@ jobs:
 
       - name: Cache libmpv
         id: mpv-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: third_party
           key: mpv-${{ runner.os }}-${{ env.MPV_TAG }}
