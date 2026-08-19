@@ -32,6 +32,10 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Full history: tags are needed to reject a duplicate release, and a
+          # shallow clone cannot push the version bump back.
+          fetch-depth: 0
 
       # Fail early on a malformed version rather than after two builds, and
       # refuse to clobber a tag that already exists.
@@ -42,29 +46,54 @@ jobs:
           if ($v -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
             throw "version '$v' is not semver, e.g. 0.2.0 or 1.0.0-rc.1"
           }
-          git fetch --tags --quiet
           if (git tag --list "v$v") {
             throw "tag v$v already exists; pick a new version or delete the tag"
           }
           "Releasing v$v"
 
-      # The version in the tag must match what the About box reports, or the
-      # binary will disagree with the download it came from.
-      - name: Check Cargo.toml version matches
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      # The binary reports CARGO_PKG_VERSION in its About box, so the manifest
+      # has to be bumped *before* the build or the download and the thing inside
+      # it disagree. Committing it also keeps master honest about what shipped.
+      - name: Set version
+        id: version
         shell: pwsh
         run: |
           $v = '${{ inputs.version }}'.Trim()
           $manifest = (Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"([^"]+)"' |
             Select-Object -First 1).Matches[0].Groups[1].Value
-          if ($manifest -ne $v) {
-            throw "Cargo.toml says $manifest but you asked to release $v. Update Cargo.toml, commit, then re-run."
-          }
-          "Cargo.toml version $manifest matches"
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-msvc
+          if ($manifest -eq $v) {
+            "Cargo.toml is already $v; nothing to bump"
+          }
+          else {
+            "Bumping Cargo.toml from $manifest to $v"
+            # Only the [package] version: the first match is the package's own,
+            # and dependency versions must not be touched.
+            $lines = Get-Content Cargo.toml
+            $done = $false
+            $lines = $lines | ForEach-Object {
+              if (-not $done -and $_ -match '^version\s*=\s*"') { $done = $true; "version = `"$v`"" }
+              else { $_ }
+            }
+            Set-Content Cargo.toml -Value $lines
+            # Cargo.lock records the package version too and would otherwise drift.
+            cargo update -p clipcut --quiet
+            if ($LASTEXITCODE -ne 0) { throw "could not update Cargo.lock" }
+
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add Cargo.toml Cargo.lock
+            git commit -m "Release v$v"
+            git push
+          }
+
+          # The release must be tagged at the bump, not the commit we started from.
+          "sha=$(git rev-parse HEAD)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - uses: Swatinem/rust-cache@v2
 
@@ -109,7 +138,7 @@ jobs:
           $ghArgs = @('release', 'create', "v$v",
                       '--title', "ClipCut v$v",
                       '--generate-notes',
-                      '--target', '${{ github.sha }}')
+                      '--target', '${{ steps.version.outputs.sha }}')
           if ('${{ inputs.draft }}' -eq 'true') { $ghArgs += '--draft' }
           if ('${{ inputs.prerelease }}' -eq 'true') { $ghArgs += '--prerelease' }
           $ghArgs += (Get-ChildItem dist\*.zip | ForEach-Object { $_.FullName })
