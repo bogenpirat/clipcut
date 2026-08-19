@@ -109,9 +109,14 @@ binary. Close it and rebuild.
 
 ## Headless self-checks
 
-The app can verify its own rendering without anyone looking at the screen, by reading
-frames back off the GPU. These drove development of the render bridge and remain the way
-to check it after changes.
+**Debug builds only.** The app can verify its own rendering without anyone looking at the
+screen, by reading frames back off the GPU. This is how the render bridge was developed
+and remains the way to check it after a change — it caught a vertically flipped picture,
+GL state corruption, and three layout bugs, none of which a unit test could see.
+
+Nothing here is used by `cargo test`; the test suite drives the library directly. These
+are for eyeballing the rendered result. They compile out of release builds entirely, so
+the render loop pays no cost and no stray environment variable can start an export.
 
 ```powershell
 # Capture the whole composited window — video and UI — to raw RGBA, then quit
@@ -130,8 +135,11 @@ $env:CLIPCUT_SEEK_BENCH = "25"
 cargo run -- video.mkv
 ```
 
-`CLIPCUT_DUMP` captures mpv's own framebuffer instead of the window. Other toggles:
-`CLIPCUT_MPV_VERBOSE=1` for mpv's log, `CLIPCUT_HWDEC=no` to rule out hardware decoding.
+`CLIPCUT_DUMP` captures mpv's own framebuffer instead of the composited window.
+
+`CLIPCUT_MPV_VERBOSE=1` (mpv's own log) and `CLIPCUT_HWDEC=no` (rule out hardware
+decoding) are the exception: they are troubleshooting knobs rather than test hooks, are
+read once at startup, and work in release builds too.
 
 ---
 

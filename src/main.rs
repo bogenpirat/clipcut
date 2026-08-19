@@ -167,6 +167,7 @@ fn main() -> Result<()> {
     ui.set_audio_modes(labels(&AUDIO_MODES));
     ui.set_version(env!("CARGO_PKG_VERSION").into());
     // Headless self-check: open the attribution dialog for inspection.
+    #[cfg(debug_assertions)]
     ui.set_about_open(std::env::var("CLIPCUT_ABOUT").is_ok_and(|v| !v.is_empty()));
     sync_encoding_to_ui(&ui, &app_state.borrow().settings);
 
@@ -396,6 +397,7 @@ fn main() -> Result<()> {
 
                 // Headless self-check: exercise the list -> select -> load path
                 // without a human clicking a row.
+                #[cfg(debug_assertions)]
                 if let Ok(n) = std::env::var("CLIPCUT_AUTOSELECT")
                     && let Ok(n) = n.parse::<i32>()
                     && n >= 0
@@ -994,6 +996,7 @@ fn main() -> Result<()> {
                     ui.set_duration_label(timecode::clock(d).into());
                     // Headless self-check: place marks so the timeline can be
                     // inspected without a human pressing I and O.
+                    #[cfg(debug_assertions)]
                     if let Ok(spec) = std::env::var("CLIPCUT_AUTOMARK") {
                         let mut parts =
                             spec.split(',').filter_map(|p| p.trim().parse::<f32>().ok());
@@ -1169,10 +1172,21 @@ fn sync_encoding_to_ui(ui: &AppWindow, settings: &Settings) {
     );
 }
 
-/// Headless self-check: dump the whole composited window and quit.
-///
-/// This is the only way to inspect what the user actually sees — video *and*
-/// Slint's widgets — without screen-capturing the desktop.
+// ---------------------------------------------------------------------------
+// Headless self-checks
+//
+// The app can render a frame and read it back off the GPU, which is how the
+// render bridge and the layout get verified without a human looking at the
+// screen. They found the vertical flip, the GL state corruption and three
+// layout bugs, none of which a unit test could have caught.
+//
+// Debug builds only. In a release build these would cost an environment lookup
+// on every rendered frame, and CLIPCUT_AUTOEXPORT would let a stray environment
+// variable start a real encode. The no-op versions below compile away entirely.
+// ---------------------------------------------------------------------------
+
+/// Dump the whole composited window — video *and* Slint's widgets — then quit.
+#[cfg(debug_assertions)]
 fn maybe_dump_window(bridge: &VideoBridge, ui: &AppWindow) {
     use std::sync::atomic::{AtomicU32, Ordering};
     static FRAMES: AtomicU32 = AtomicU32::new(0);
@@ -1197,9 +1211,11 @@ fn maybe_dump_window(bridge: &VideoBridge, ui: &AppWindow) {
     let _ = slint::quit_event_loop();
 }
 
-/// Headless self-check: dump the mpv-rendered framebuffer and quit.
-///
-/// Lets the render path be verified without a human looking at the screen.
+#[cfg(not(debug_assertions))]
+fn maybe_dump_window(_bridge: &VideoBridge, _ui: &AppWindow) {}
+
+/// Dump mpv's own framebuffer, without the UI composited over it, then quit.
+#[cfg(debug_assertions)]
 fn maybe_dump(bridge: &VideoBridge) {
     use std::sync::atomic::{AtomicU32, Ordering};
     static FRAMES: AtomicU32 = AtomicU32::new(0);
@@ -1224,3 +1240,6 @@ fn maybe_dump(bridge: &VideoBridge) {
     }
     let _ = slint::quit_event_loop();
 }
+
+#[cfg(not(debug_assertions))]
+fn maybe_dump(_bridge: &VideoBridge) {}

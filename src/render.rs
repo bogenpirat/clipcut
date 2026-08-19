@@ -346,6 +346,9 @@ impl VideoBridge {
     /// Unlike [`Self::read_pixels`], which sees only mpv's output, this captures
     /// what the user actually looks at: video composited with the Slint UI.
     /// Call from `RenderingState::AfterRendering`.
+    ///
+    /// Debug builds only — it exists for the headless self-checks.
+    #[cfg(debug_assertions)]
     pub fn read_window(&self, w: u32, h: u32) -> Vec<u8> {
         let mut buf = vec![0u8; (w * h * 4) as usize];
         unsafe {
@@ -365,8 +368,8 @@ impl VideoBridge {
 
     /// Read mpv's own render target back as raw RGBA, bottom-up.
     ///
-    /// Used by the headless self-check to verify the bridge without a human
-    /// looking at the screen.
+    /// Debug builds only — it exists for the headless self-checks.
+    #[cfg(debug_assertions)]
     pub fn read_pixels(&self) -> Option<(u32, u32, Vec<u8>)> {
         let t = self.target.as_ref()?;
         let mut buf = vec![0u8; (t.w * t.h * 4) as usize];
