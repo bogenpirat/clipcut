@@ -1,6 +1,6 @@
 [package]
 name = "clipcut"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 description = "A fast video clipping tool: find a cut point, set marks, export a clip"
 readme = "README.md"
