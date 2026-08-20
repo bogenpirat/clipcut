@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="10 4 100 138" width="400" height="552">
+  <polygon points="60,94 104,116 60,138 16,116" fill="#2a2440"></polygon>
+  <polygon points="60,84 104,106 60,128 16,106" fill="#4c3a86"></polygon>
+  <polygon points="16,106 60,128 60,136 16,114" fill="#33275e"></polygon>
+  <polygon points="104,106 60,128 60,136 104,114" fill="#241b45"></polygon>
+  <polygon points="60,72 104,94 60,116 16,94" fill="#5b21b6"></polygon>
+  <polygon points="16,94 60,116 60,124 16,102" fill="#40188a"></polygon>
+  <polygon points="104,94 60,116 60,124 104,102" fill="#31126b"></polygon>
+  <polygon points="60,8 104,30 60,52 16,30" fill="#a78bfa"></polygon>
+  <polygon points="16,30 60,52 60,62 16,40" fill="#7C3AED"></polygon>
+  <polygon points="104,30 60,52 60,62 104,40" fill="#5b21b6"></polygon>
+  <polygon points="62,18 36,31 75,38" fill="#ffffff"></polygon>
+</svg>

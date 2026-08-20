@@ -9,6 +9,9 @@ export { FileEntry }
 
 export component AppWindow inherits Window {
     title: "ClipCut";
+    // The .exe carries the same icon as a resource, which covers Explorer and the
+    // taskbar; this is what the window and its title bar use.
+    icon: @image-url("../assets/png/clipcut-256.png");
     min-width: 900px;
     min-height: 600px;
     preferred-width: 1280px;

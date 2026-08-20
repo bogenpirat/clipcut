@@ -2,6 +2,7 @@ use std::{env, fs, path::PathBuf};
 
 fn main() {
     slint_build::compile("ui/app.slint").expect("failed to compile Slint UI");
+    embed_icon();
 
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let mpv_dir = manifest_dir.join("third_party").join("mpv-dev").join("64");
@@ -32,3 +33,25 @@ fn main() {
         mpv_dir.join("libmpv-2.dll").display()
     );
 }
+
+/// Embed the application icon and version info into the executable.
+///
+/// The icon lands as resource id 1, which is what Explorer, the taskbar and the
+/// Alt-Tab switcher read straight off the .exe. The window itself gets its icon
+/// from `ui/app.slint`, since that path never goes near the resource table.
+///
+/// A missing resource compiler is not worth failing a build over: the result is
+/// a working binary wearing the default icon, so warn and carry on.
+#[cfg(windows)]
+fn embed_icon() {
+    println!("cargo:rerun-if-changed=assets/clipcut.ico");
+
+    let mut res = winresource::WindowsResource::new();
+    res.set_icon("assets/clipcut.ico");
+    if let Err(e) = res.compile() {
+        println!("cargo:warning=could not embed the application icon: {e}");
+    }
+}
+
+#[cfg(not(windows))]
+fn embed_icon() {}

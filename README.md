@@ -1,3 +1,5 @@
+<img src="assets/clipcut-banner-1280x400.png" alt="ClipCut — cut the clips out of long video." width="720">
+
 # ClipCut
 
 A fast video clipping tool: point it at a folder of recordings, scrub to find a cut
