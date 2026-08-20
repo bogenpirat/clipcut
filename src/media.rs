@@ -48,7 +48,7 @@ impl Tools {
 
     /// What the build was compiled with. See [`Self::can_encode`] for usability.
     pub fn encoders(&self) -> HashSet<String> {
-        let Ok(out) = Command::new(&self.ffmpeg)
+        let Ok(out) = command(&self.ffmpeg)
             .args(["-hide_banner", "-loglevel", "error", "-encoders"])
             .output()
         else {
@@ -65,7 +65,7 @@ impl Tools {
     /// `h264_nvenc`, and only fails when you try to use it. The sole reliable
     /// test is to encode a frame and see whether it works.
     pub fn can_encode(&self, encoder: &str) -> bool {
-        Command::new(&self.ffmpeg)
+        command(&self.ffmpeg)
             .args([
                 "-hide_banner",
                 "-loglevel",
@@ -103,7 +103,7 @@ impl Tools {
         let start = (around - LOOKBACK_SECONDS).max(0.0);
         let end = around + LOOKAHEAD_SECONDS;
 
-        let out = Command::new(&self.ffprobe)
+        let out = command(&self.ffprobe)
             .args([
                 "-v",
                 "error",
@@ -129,6 +129,27 @@ impl Tools {
         }
         Ok(parse_keyframes(&String::from_utf8_lossy(&out.stdout)))
     }
+}
+
+/// A `Command` that does not flash a console window.
+///
+/// A GUI-subsystem process spawning a console-subsystem child — every ffmpeg and
+/// ffprobe run — has a console allocated for that child, which appears as a black
+/// window blinking on screen. The encoder probe alone does this five times at
+/// startup. `CREATE_NO_WINDOW` suppresses it; piped stdio is unaffected.
+#[cfg(windows)]
+pub fn command(program: &Path) -> Command {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+    let mut cmd = Command::new(program);
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd
+}
+
+#[cfg(not(windows))]
+pub fn command(program: &Path) -> Command {
+    Command::new(program)
 }
 
 #[cfg(windows)]

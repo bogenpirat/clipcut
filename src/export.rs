@@ -9,14 +9,14 @@
 
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
 
 use crate::encode::{ExportRequest, Progress, ProgressParser, build_args, display_command};
-use crate::media::Tools;
+use crate::media::{Tools, command};
 
 const STDERR_TAIL_LINES: usize = 40;
 
@@ -61,7 +61,7 @@ where
             .with_context(|| format!("could not create {}", parent.display()))?;
     }
 
-    let mut child = Command::new(&tools.ffmpeg)
+    let mut child = command(&tools.ffmpeg)
         .args(&args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
